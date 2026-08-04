@@ -165,6 +165,8 @@ void AwaitOriginStartup()
 
 void EnsureOriginStarted()
 {
+	return; // Do not start origin
+
 	if (GetProcessByName(L"Origin.exe") || GetProcessByName(L"EADesktop.exe"))
 		return; // already started
 
