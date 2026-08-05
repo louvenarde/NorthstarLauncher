@@ -6,7 +6,9 @@ target_compile_definitions(NorthstarLauncher PRIVATE UNICODE _UNICODE)
 
 target_link_libraries(
     NorthstarLauncher
-    PRIVATE shlwapi.lib
+    PRIVATE
+			NorthstarDLL
+			shlwapi.lib
             kernel32.lib
             user32.lib
             gdi32.lib

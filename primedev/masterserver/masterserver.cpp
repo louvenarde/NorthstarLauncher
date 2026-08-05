@@ -736,6 +736,50 @@ void MasterServerManager::AuthenticateWithServer(const char* uid, const char* pl
 	requestThread.detach();
 }
 
+void MasterServerManager::AuthenticateOffline()
+{
+	//g_pServerAuthentication->m_RemoteAuthenticationData.clear();
+	//g_pServerAuthentication->m_RemoteAuthenticationData.insert(std::make_pair(authInfoJson["authToken"].GetString(), newAuthData));
+
+	m_bSuccessfullyConnected = true;
+	m_bSuccessfullyAuthenticatedWithGameServer = true;
+	m_bScriptAuthenticatingWithGameServer = true;
+
+	RemoteAuthData newAuthData {};
+	strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), "DEADBEEFDEADBEEFDEADBEEFDEADBEEF", sizeof(newAuthData.uid) - 1);
+	strncpy_s(newAuthData.username, sizeof(newAuthData.username), "LouveRox", sizeof(newAuthData.username) - 1);
+
+	const char persistentData[1] {};
+	newAuthData.pdataSize = ARRAYSIZE(persistentData);
+	newAuthData.pdata = new char[newAuthData.pdataSize];
+	strncpy_s(newAuthData.pdata, newAuthData.pdataSize, persistentData, newAuthData.pdataSize);
+
+	const auto authToken = "";
+
+	std::lock_guard<std::mutex> guard(g_pServerAuthentication->m_AuthDataMutex);
+	g_pServerAuthentication->m_RemoteAuthenticationData.clear();
+	g_pServerAuthentication->m_RemoteAuthenticationData.insert(std::make_pair(authToken, newAuthData));
+
+	ScopeGuard cleanup(
+		[&]
+		{
+			m_bAuthenticatingWithGameServer = false;
+			m_bScriptAuthenticatingWithGameServer = false;
+
+			
+				Cbuf_AddText(Cbuf_GetCurrentPlayer(), "ns_end_reauth_and_leave_to_lobby", cmd_source_t::kCommandSrcCode);
+
+			//if (m_bNewgameAfterSelfAuth)
+			//{
+			//	// pretty sure this is threadsafe?
+			//	Cbuf_AddText(Cbuf_GetCurrentPlayer(), "ns_end_reauth_and_leave_to_lobby", cmd_source_t::kCommandSrcCode);
+			//	m_bNewgameAfterSelfAuth = false;
+			//}
+
+			//curl_easy_cleanup(curl);
+		});
+}
+
 void MasterServerManager::WritePlayerPersistentData(const char* playerId, const char* pdata, size_t pdataSize)
 {
 	// still call this if we don't have a server id, since lobbies that aren't port forwarded need to be able to call it
