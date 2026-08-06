@@ -1,6 +1,7 @@
 #include "proxy.h"
 #include "lan.h"
 #include <random>
+#include <lmcons.h>
 
 // No DEBUG or _DEBUG macro in cmake?
 #define DEBUG_PROXY
@@ -9,33 +10,72 @@
 OriginProxy* g_originProxy;
 
 #define PROXY_SIMPLE_SUCCESS_DECL(name)                                                                                                    \
-	static OriginProxy::OriginErrorT(__fastcall* o_p##name##)() = nullptr;                                                                 \
-	static OriginProxy::OriginErrorT __fastcall h_##name##()                                                                               \
+	static OriginProxy::OriginError_t(__fastcall* o_p##name##)() = nullptr;                                                                 \
+	static OriginProxy::OriginError_t __fastcall h_##name##()                                                                               \
 	{                                                                                                                                      \
-		return OriginProxy::OriginErrorT::ORIGIN_SUCCESS;                                                                                  \
+		return OriginProxy::OriginError_t::ORIGIN_SUCCESS;                                                                                  \
 	}
 
-#define PROXY_SIMPLE_SUCCESS_IMPL(name)                                                                                                    \
+#define PROXY_IMPL(name)                                                                                                    \
 	o_p##name## = module.GetExportedFunction(#name).RCast<decltype(o_p##name##)>();                                                        \
 	HookAttach(&(PVOID&)o_p##name##, (PVOID)h_##name##);
 
 
+PROXY_SIMPLE_SUCCESS_DECL(OriginReadEnumerationSync);
 PROXY_SIMPLE_SUCCESS_DECL(OriginGrantAchievement);
 PROXY_SIMPLE_SUCCESS_DECL(OriginSetPresence);
 PROXY_SIMPLE_SUCCESS_DECL(OriginUpdate);
 
-static OriginProxy::OriginErrorT(__fastcall* o_pTier0_GetOriginStartupResult)() = nullptr;
-static OriginProxy::OriginErrorT __fastcall h_Tier0_GetOriginStartupResult()
+static OriginProxy::OriginError_t(__fastcall* o_pTier0_GetOriginStartupResult)() = nullptr;
+static OriginProxy::OriginError_t __fastcall h_Tier0_GetOriginStartupResult()
 {
-	return OriginProxy::OriginErrorT::ORIGIN_SUCCESS;
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
-static OriginProxy::OriginErrorT(__fastcall* o_pOriginGetSettingSync)(int64_t inSetting, OUT void* outSetting) = nullptr;
-static OriginProxy::OriginErrorT __fastcall h_OriginGetSettingSync(int64_t inSetting, OUT void* outSetting)
-{
-	NS::log::NORTHSTAR->warn("h_OriginGetSettingSync({}) => {}", inSetting, OriginProxy::OriginErrorT::ORIGIN_SUCCESS);
 
-	return OriginProxy::OriginErrorT::ORIGIN_SUCCESS;
+static OriginProxy::OriginError_t(__fastcall* o_pOriginGetSettingSync)(int64_t inSettingg, char* outSettingBuff, size_t& outBuffSize) =
+	nullptr;
+static OriginProxy::OriginError_t __fastcall h_OriginGetSettingSync(int64_t inSetting, char* outSettingBuff, size_t& outBuffSize)
+{
+	std::string setting {};
+	const auto originSettings = g_originProxy->GetSettings();
+	switch (inSetting)
+	{
+	case 0:
+		setting = originSettings->Language;
+		break;
+
+	case 1:
+		setting = originSettings->Environment;
+		break;
+
+	case 2:
+		setting = originSettings->Language;
+		break;
+
+	case 3:
+		setting = std::to_string(originSettings->IsIGOAvailable);
+		break;
+
+	case 4:
+		setting = std::to_string(originSettings->IsIGOEnabled);
+		break;
+
+	case 5:
+		setting = std::to_string(originSettings->IsTelemetryEnabled);
+		break;
+
+	case 6:
+		setting = std::to_string(originSettings->IsManualOffline);
+		break;
+
+		default:
+			NS::log::NORTHSTAR->warn("OriginGetSettingSync({}) does not map to any known setting", inSetting);
+			break;
+	}
+
+	strncpy(outSettingBuff, setting.c_str(), outBuffSize);
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
 static const char*(__fastcall* o_pOriginGetErrorDescription)(int64_t errorCode) = nullptr;
@@ -68,10 +108,10 @@ static const char** __fastcall h_OriginGetErrorInfo(int64_t errorCode)
 	return errorInfoStr;
 }
 
-static OriginProxy::OriginErrorT(__fastcall* o_pOriginStartup)(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse) = nullptr;
-static OriginProxy::OriginErrorT __fastcall h_OriginStartup(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse)
+static OriginProxy::OriginError_t(__fastcall* o_pOriginStartup)(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse) = nullptr;
+static OriginProxy::OriginError_t __fastcall h_OriginStartup(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse)
 {
-	return OriginProxy::OriginErrorT::ORIGIN_SUCCESS;
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
 
@@ -87,14 +127,14 @@ static const char* __fastcall h_OriginGetDefaultPersona()
 	return g_originProxy->GetProfile()->Persona;
 }
 
-static const OriginProxy::OriginErrorT(__fastcall* o_pOriginCheckOnline)(bool& isOnline) = nullptr;
-static const OriginProxy::OriginErrorT __fastcall h_OriginCheckOnline(bool& isOnline)
+static const OriginProxy::OriginError_t(__fastcall* o_pOriginCheckOnline)(bool& isOnline) = nullptr;
+static const OriginProxy::OriginError_t __fastcall h_OriginCheckOnline(bool& isOnline)
 {
 	isOnline = true;
-	return OriginProxy::OriginErrorT::ORIGIN_SUCCESS;
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 static OriginProxy::OriginId_t(__fastcall* o_pOriginGetProfile)() = nullptr;
-static OriginProxy::OriginErrorT __fastcall h_OriginGetProfile(
+static OriginProxy::OriginError_t __fastcall h_OriginGetProfile(
 	uint64_t unk1,
 	uint64_t unk2,
 	void(__fastcall* callbackWithProfile)(uint64_t unused, const OriginProxy::OriginGetProfileResult_t* result),
@@ -103,8 +143,56 @@ static OriginProxy::OriginErrorT __fastcall h_OriginGetProfile(
 
 	callbackWithProfile(0, g_originProxy->GetProfile());
 
-	return OriginProxy::OriginErrorT::ORIGIN_SUCCESS;
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
+
+static OriginProxy::OriginError_t(__fastcall* o_pOriginRequestAuthCode)(
+	int64_t userId,
+	const char* clientId, // TITANFALL2-PC-SERVER
+	void(__fastcall* callbackWithProfile)(void* unk1, const char* unk2),
+	uint64_t unk1, // 0
+	uint64_t unk2, // 3000
+	uint64_t unk3 // 0
+) = nullptr;
+
+static OriginProxy::OriginError_t __fastcall h_OriginRequestAuthCode(
+	int64_t userId,
+	const char* clientId, // TITANFALL2-PC-SERVER
+	void(__fastcall* originAuthCodeResult)(void* unk1, const char** unk2),
+	uint64_t unk1, // 0
+	uint64_t unk2, // 3000
+	uint64_t unk3 // 0
+)
+{
+	originAuthCodeResult(nullptr, nullptr);
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
+}
+
+static OriginProxy::OriginError_t(__fastcall* o_pOriginQueryOffers)(
+	int64_t userId,
+	const char* name, // Origin.CTY.50.0000068
+	void(__fastcall* callbackWithProfile)(void* unk1, const char* unk2),
+	uint64_t unk1, // 0
+	uint64_t unk2, // 3000
+	uint64_t unk3 // 0
+	) = nullptr;
+
+static OriginProxy::OriginError_t __fastcall h_OriginQueryOffers(
+	int64_t userId,
+	const char* name, // Origin.CTY.50.0000068
+	uint64_t unk1, // 1
+	uint64_t unk2, // 0
+	uint64_t unk3, // 0
+	void(__fastcall* originQueryOffersResult)(void* unk1, uint64_t originHandle, uint64_t unk3), 
+	uint64_t unk4, // 0
+	uint64_t unk5, // 1000
+	uint64_t unk6 // 0
+)
+{
+	originQueryOffersResult(nullptr, 0, 0); // Offer count + Offer ptr?
+	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
+}
+
 
 #ifdef DEBUG_PROXY
 static const char**(__fastcall* o_pGetErrorString)(int64_t errorCode) = nullptr;
@@ -137,33 +225,20 @@ ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 {
 	if (g_LanMode->Enabled())
 	{
-		o_pOriginGetSettingSync = module.GetExportedFunction("OriginGetSettingSync").RCast<decltype(o_pOriginGetSettingSync)>();
-		HookAttach(&(PVOID&)o_pOriginGetSettingSync, (PVOID)h_OriginGetSettingSync);
-
-		o_pOriginGetErrorInfo = module.GetExportedFunction("OriginGetErrorInfo").RCast<decltype(o_pOriginGetErrorInfo)>();
-		HookAttach(&(PVOID&)o_pOriginGetErrorInfo, (PVOID)h_OriginGetErrorInfo);
-
-		o_pOriginGetErrorDescription =
-			module.GetExportedFunction("OriginGetErrorDescription").RCast<decltype(o_pOriginGetErrorDescription)>();
-		HookAttach(&(PVOID&)o_pOriginGetErrorDescription, (PVOID)h_OriginGetErrorDescription);
-
-		o_pOriginStartup = module.GetExportedFunction("OriginStartup").RCast<decltype(o_pOriginStartup)>();
-		HookAttach(&(PVOID&)o_pOriginStartup, (PVOID)h_OriginStartup);
-
-		o_pOriginGetDefaultUser = module.GetExportedFunction("OriginGetDefaultUser").RCast<decltype(o_pOriginGetDefaultUser)>();
-		HookAttach(&(PVOID&)o_pOriginGetDefaultUser, (PVOID)h_OriginGetDefaultUser);
-
-		o_pOriginGetDefaultPersona = module.GetExportedFunction("OriginGetDefaultPersona").RCast<decltype(o_pOriginGetDefaultPersona)>();
-		HookAttach(&(PVOID&)o_pOriginGetDefaultPersona, (PVOID)h_OriginGetDefaultPersona);
-
-		PROXY_SIMPLE_SUCCESS_IMPL(OriginGrantAchievement);
-		PROXY_SIMPLE_SUCCESS_IMPL(OriginCheckOnline);
-		PROXY_SIMPLE_SUCCESS_IMPL(OriginSetPresence);
-		PROXY_SIMPLE_SUCCESS_IMPL(OriginUpdate);
-
-
-		o_pOriginGetProfile = module.GetExportedFunction("OriginGetProfile").RCast<decltype(o_pOriginGetProfile)>();
-		HookAttach(&(PVOID&)o_pOriginGetProfile, (PVOID)h_OriginGetProfile);
+		PROXY_IMPL(OriginGetSettingSync);
+		PROXY_IMPL(OriginGetErrorInfo);
+		PROXY_IMPL(OriginGetErrorDescription);
+		PROXY_IMPL(OriginStartup);
+		PROXY_IMPL(OriginGetDefaultUser);
+		PROXY_IMPL(OriginGetDefaultPersona);
+		PROXY_IMPL(OriginReadEnumerationSync);
+		PROXY_IMPL(OriginGrantAchievement);
+		PROXY_IMPL(OriginCheckOnline);
+		PROXY_IMPL(OriginSetPresence);
+		PROXY_IMPL(OriginUpdate);
+		PROXY_IMPL(OriginGetProfile);
+		PROXY_IMPL(OriginQueryOffers);
+		PROXY_IMPL(OriginRequestAuthCode);
 
 #ifdef DEBUG_PROXY
 		o_pGetErrorString = module.Offset(0x190D4).RCast<decltype(o_pGetErrorString)>();
@@ -183,10 +258,21 @@ ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 OriginProxy::OriginProxy()
 {
 	CModule engineModule("engine.dll");
-	this->originLastErrorPtr = engineModule.Offset(0x13978264).RCast<const OriginProxy::OriginErrorT*>();
+	this->originLastErrorPtr = engineModule.Offset(0x13978264).RCast<const OriginProxy::OriginError_t*>();
 
-	strcpy(persona, "Proxysona");
-	strcpy(country, "France");
+	// Windows-centric username, is there another way?
+	{
+		CHAR username[UNLEN + 1];
+		DWORD unamelen = sizeof(username) / sizeof(*username);
+		bool success = GetUserNameA(username, &unamelen);
+
+		if (success)
+		{
+			strncpy(persona, reinterpret_cast<const char*>(username), unamelen);
+		}
+	}
+
+	strncpy(country, "France", ARRAYSIZE(persona));
 
 	std::random_device rd;
 	std::mt19937_64 gen(rd());
@@ -198,4 +284,11 @@ OriginProxy::OriginProxy()
 	this->originProfile.Country = country;
 	this->originProfile.AvatarId = avatarId;
 	this->originProfile.UserId = userId;
+
+	this->originSettings.Environment = "";
+	this->originSettings.IsIGOAvailable = false;
+	this->originSettings.IsIGOEnabled = false;
+	this->originSettings.IsManualOffline = false;
+	this->originSettings.IsTelemetryEnabled = true;
+	this->originSettings.Language = "French";
 }

@@ -22,8 +22,19 @@ public:
 		const char* CommerceCurrency;
 	};
 
-	
-	enum OriginErrorT
+	struct OriginSettings_t
+	{
+		const char* Language;
+		const char* Environment;
+		bool IsIGOAvailable;
+		bool IsIGOEnabled;
+		bool IsTelemetryEnabled;
+		bool IsManualOffline;
+	};
+
+	static_assert(sizeof(OriginSettings_t) == 24);
+
+	enum OriginError_t
 	{
 		ORIGIN_ERROR_OUT_OF_MEMORY = -1610612735, // 0xA0000001
 		ORIGIN_ERROR_SDK_NOT_INITIALIZED = -1610547200, // 0xA0010000
@@ -111,7 +122,8 @@ public:
 	OriginProxy();
 
 	const OriginGetProfileResult_t* GetProfile() { return &originProfile; };
-	OriginErrorT GetOriginLastError() { return originLastErrorPtr ? *originLastErrorPtr : ORIGIN_SUCCESS; };
+	const OriginSettings_t* GetSettings() { return &originSettings; };
+	OriginError_t GetOriginLastError() { return originLastErrorPtr ? *originLastErrorPtr : ORIGIN_SUCCESS; };
 
 private:
 	OriginId_t userId;
@@ -121,8 +133,9 @@ private:
 	char country[64] {};
 
 	OriginGetProfileResult_t originProfile;
+	OriginSettings_t originSettings;
 
-	const OriginErrorT* originLastErrorPtr = nullptr;
+	const OriginError_t* originLastErrorPtr = nullptr;
 
 	static_assert(offsetof(OriginGetProfileResult_t, PersonaId) == 8);
 	static_assert(offsetof(OriginGetProfileResult_t, Persona) == 16); // 64 chars
