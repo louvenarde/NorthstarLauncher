@@ -2,6 +2,7 @@
 #include "shared/playlist.h"
 #include "core/tier0.h"
 #include "core/convar/convar.h"
+#include "proxy/lan.h"
 
 #include <regex>
 
@@ -147,6 +148,12 @@ void ServerPresenceManager::RunFrame(double flCurrentTime)
 	// don't run if we're sp and don't want to report sp
 	if (m_ServerPresence.m_bIsSingleplayerServer && !Cvar_ns_report_sp_server_to_masterserver->GetBool())
 		return;
+
+	// Don't run in LAN Mode - TODO Broadcast UDP packet on the broadcast LAN address
+	if (g_LanMode->Enabled())
+	{
+		return;
+	}
 
 	// Call RunFrame() so that reporters can, for example, handle std::future results as soon as they arrive.
 	for (ServerPresenceReporter* reporter : m_vPresenceReporters)

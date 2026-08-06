@@ -119,15 +119,8 @@ ADD_SQFUNC("void", NSTryAuthWithLocalServer, "", "", ScriptContext::UI)
 {
 	NOTE_UNUSED(sqvm);
 
-	if (g_LanMode->Enabled())
-	{
-		g_pMasterServerManager->AuthenticateOffline();
-	}
-	else
-	{
-		// do auth request
-		g_pMasterServerManager->AuthenticateWithOwnServer(g_pLocalPlayerUserID, g_pMasterServerManager->m_sOwnClientAuthToken);
-	}
+	// do auth request
+	g_pMasterServerManager->AuthenticateWithOwnServer(g_pLocalPlayerUserID, g_pMasterServerManager->m_sOwnClientAuthToken);
 
 	return SQRESULT_NULL;
 }

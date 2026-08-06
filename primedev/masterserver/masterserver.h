@@ -132,9 +132,11 @@ public:
 	void AuthenticateOriginWithMasterServer(const char* uid, const char* originToken);
 	void AuthenticateWithOwnServer(const char* uid, const char* playerToken);
 	void AuthenticateWithServer(const char* uid, const char* playerToken, RemoteServerInfo server, const char* password);
-	void AuthenticateOffline();
 	void WritePlayerPersistentData(const char* playerId, const char* pdata, size_t pdataSize);
 	void ProcessConnectionlessPacketSigreq1(std::string req);
+
+private:
+	void AuthenticateOffline(const char* uid);
 };
 
 extern MasterServerManager* g_pMasterServerManager;

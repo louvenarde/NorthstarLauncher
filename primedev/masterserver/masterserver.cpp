@@ -11,7 +11,7 @@
 #include "util/version.h"
 #include "server/auth/bansystem.h"
 #include "dedicated/dedicated.h"
-
+#include "proxy/proxy.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -19,6 +19,7 @@
 
 #include <cstring>
 #include <regex>
+#include <proxy/lan.h>
 
 using namespace std::chrono_literals;
 
@@ -467,6 +468,11 @@ void MasterServerManager::AuthenticateWithOwnServer(const char* uid, const char*
 	if (m_bAuthenticatingWithGameServer || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
 
+	if (g_LanMode->Enabled()){
+		AuthenticateOffline(uid);
+		return;
+	}
+
 	m_bAuthenticatingWithGameServer = true;
 	m_bScriptAuthenticatingWithGameServer = true;
 	m_bSuccessfullyAuthenticatedWithGameServer = false;
@@ -736,18 +742,17 @@ void MasterServerManager::AuthenticateWithServer(const char* uid, const char* pl
 	requestThread.detach();
 }
 
-void MasterServerManager::AuthenticateOffline()
+void MasterServerManager::AuthenticateOffline(const char* uid)
 {
-	//g_pServerAuthentication->m_RemoteAuthenticationData.clear();
-	//g_pServerAuthentication->m_RemoteAuthenticationData.insert(std::make_pair(authInfoJson["authToken"].GetString(), newAuthData));
-
 	m_bSuccessfullyConnected = true;
 	m_bSuccessfullyAuthenticatedWithGameServer = true;
 	m_bScriptAuthenticatingWithGameServer = true;
 
+	const auto profile = g_originProxy->GetProfile();
+
 	RemoteAuthData newAuthData {};
-	strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), "DEADBEEFDEADBEEFDEADBEEFDEADBEEF", sizeof(newAuthData.uid) - 1);
-	strncpy_s(newAuthData.username, sizeof(newAuthData.username), "LouveRox", sizeof(newAuthData.username) - 1);
+	strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), uid, sizeof(newAuthData.uid)-1);
+	strncpy_s(newAuthData.username, sizeof(newAuthData.username), profile->Persona, sizeof(newAuthData.username) - 1);
 
 	const char persistentData[1] {};
 	newAuthData.pdataSize = ARRAYSIZE(persistentData);
@@ -766,17 +771,12 @@ void MasterServerManager::AuthenticateOffline()
 			m_bAuthenticatingWithGameServer = false;
 			m_bScriptAuthenticatingWithGameServer = false;
 
-			
+			if (m_bNewgameAfterSelfAuth)
+			{
+				// pretty sure this is threadsafe?
 				Cbuf_AddText(Cbuf_GetCurrentPlayer(), "ns_end_reauth_and_leave_to_lobby", cmd_source_t::kCommandSrcCode);
-
-			//if (m_bNewgameAfterSelfAuth)
-			//{
-			//	// pretty sure this is threadsafe?
-			//	Cbuf_AddText(Cbuf_GetCurrentPlayer(), "ns_end_reauth_and_leave_to_lobby", cmd_source_t::kCommandSrcCode);
-			//	m_bNewgameAfterSelfAuth = false;
-			//}
-
-			//curl_easy_cleanup(curl);
+				m_bNewgameAfterSelfAuth = false;
+			}
 		});
 }
 

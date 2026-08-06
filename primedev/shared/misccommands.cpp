@@ -9,6 +9,7 @@
 #include "mods/modmanager.h"
 #include "server/auth/serverauthentication.h"
 #include "squirrel/squirrel.h"
+#include <proxy/lan.h>
 
 void ConCommand_force_newgame(const CCommand& arg)
 {

@@ -13,6 +13,7 @@
 #include "engine/r2engine.h"
 #include "client/r2client.h"
 #include "server/r2server.h"
+#include "proxy/lan.h"
 
 #include <fstream>
 #include <filesystem>
@@ -394,6 +395,13 @@ ON_DLL_LOAD_RELIESON("engine.dll", ServerAuthentication, (ConCommand, ConVar), (
 		"0",
 		FCVAR_GAMEDLL,
 		"Whether the pdata of unauthenticated clients will be written to disk when changed");
+
+	// LAN Mode is always insecure mode
+	if (g_LanMode->Enabled())
+	{
+		g_pServerAuthentication->Cvar_ns_auth_allow_insecure->SetValue(true);
+		g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->SetValue(true);
+	}
 
 	RegisterConCommand(
 		"ns_resetpersistence", ConCommand_ns_resetpersistence, "resets your pdata when you next enter the lobby", FCVAR_NONE);
