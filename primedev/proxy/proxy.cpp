@@ -158,13 +158,16 @@ static OriginProxy::OriginError_t(__fastcall* o_pOriginRequestAuthCode)(
 static OriginProxy::OriginError_t __fastcall h_OriginRequestAuthCode(
 	int64_t userId,
 	const char* clientId, // TITANFALL2-PC-SERVER
-	void(__fastcall* originAuthCodeResult)(void* unk1, const char** unk2),
+	void(__fastcall* originAuthCodeResult)(void* unk1, const char** originAuthCode),
 	uint64_t unk1, // 0
 	uint64_t unk2, // 3000
 	uint64_t unk3 // 0
 )
 {
-	originAuthCodeResult(nullptr, nullptr);
+	static char originAuthCode[256] {};
+	originAuthCode[0] = '\x01'; // Must not be zero
+	const char* ptr = reinterpret_cast<const char*>(originAuthCode);
+	originAuthCodeResult(nullptr, &ptr);
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
