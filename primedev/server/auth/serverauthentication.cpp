@@ -150,6 +150,20 @@ void ServerAuthenticationManager::AuthenticatePlayer(CBaseClient* pPlayer, uint6
 		return;
 	}
 
+	if (Cvar_ns_auth_allow_insecure_write->GetBool())
+	{
+		pPlayer->m_iPersistenceReady = ePersistenceReady::READY_INSECURE;
+		// Read offline data
+		std::ifstream localData("persistent.bin", std::ios::binary | std::ios::in);
+		if (localData.is_open())
+		{
+			ZeroMemory(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
+			localData.read(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
+		}
+
+		return;
+	}
+
 	std::lock_guard<std::mutex> guard(m_AuthDataMutex);
 	auto authData = m_RemoteAuthenticationData.find(pAuthToken);
 	if (authData != m_RemoteAuthenticationData.end())
@@ -209,7 +223,15 @@ void ServerAuthenticationManager::WritePersistentData(CBaseClient* pPlayer)
 	}
 	else if (Cvar_ns_auth_allow_insecure_write->GetBool())
 	{
-		// todo: write pdata to disk here
+		const auto size = m_PlayerAuthenticationData[pPlayer].pdataSize;
+		if (size > 0) // Prevent a zero-size write from clearing the persistent data entirely
+		{
+			std::ofstream localData("persistent.bin", std::ios::binary | std::ios::out);
+			if (localData.is_open())
+			{
+				localData.write(reinterpret_cast<const char*>(pPlayer->m_PersistenceBuffer), size);
+			}
+		}
 	}
 }
 

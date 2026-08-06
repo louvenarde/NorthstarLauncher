@@ -754,10 +754,9 @@ void MasterServerManager::AuthenticateOffline(const char* uid)
 	strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), uid, sizeof(newAuthData.uid)-1);
 	strncpy_s(newAuthData.username, sizeof(newAuthData.username), profile->Persona, sizeof(newAuthData.username) - 1);
 
-	const char persistentData[1] {};
-	newAuthData.pdataSize = ARRAYSIZE(persistentData);
-	newAuthData.pdata = new char[newAuthData.pdataSize];
-	strncpy_s(newAuthData.pdata, newAuthData.pdataSize, persistentData, newAuthData.pdataSize);
+	newAuthData.pdataSize = PERSISTENCE_MAX_SIZE;
+	newAuthData.pdata = new char[PERSISTENCE_MAX_SIZE];
+	ZeroMemory(newAuthData.pdata, newAuthData.pdataSize);
 
 	const auto authToken = "";
 
