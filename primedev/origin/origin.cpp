@@ -7,7 +7,7 @@ static bool __fastcall h_CheckIfOriginIsInstalled()
 {
 	if (g_LanMode->Enabled())
 	{
-		return false; 
+		return false;
 	}
 
 	if (!strstr(GetCommandLineA(), "-noOriginStartup"))
@@ -31,7 +31,7 @@ static uint64_t __fastcall h_TryToStartOrigin(void* a1)
 	{
 		return 0;
 	}
-	
+
 	if (!strstr(GetCommandLineA(), "-noOriginStartup"))
 		return o_pTryToStartOrigin(a1);
 
@@ -51,5 +51,4 @@ ON_DLL_LOAD("OriginSDK.dll", OriginSDKFuncs, (CModule module))
 
 	o_pTryToStartOrigin = module.Offset(0xa19b0).RCast<decltype(o_pTryToStartOrigin)>();
 	HookAttach(&(PVOID&)o_pTryToStartOrigin, (PVOID)h_TryToStartOrigin);
-	
 }

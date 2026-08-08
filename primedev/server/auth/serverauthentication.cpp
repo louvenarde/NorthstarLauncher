@@ -222,7 +222,8 @@ void ServerAuthenticationManager::WritePersistentData(CBaseClient* pPlayer)
 	}
 }
 
-void ServerAuthenticationManager::ReadOfflinePersistentData(CBaseClient* pPlayer) {
+void ServerAuthenticationManager::ReadOfflinePersistentData(CBaseClient* pPlayer)
+{
 	// Read offline data
 	const auto path = GetOfflinePersistentDataPath();
 	std::ifstream localData(path, std::ios::binary | std::ios::in);
@@ -233,7 +234,8 @@ void ServerAuthenticationManager::ReadOfflinePersistentData(CBaseClient* pPlayer
 	}
 }
 
-void ServerAuthenticationManager::WriteOfflinePersistentData(CBaseClient* pPlayer) {
+void ServerAuthenticationManager::WriteOfflinePersistentData(CBaseClient* pPlayer)
+{
 
 	const auto size = m_PlayerAuthenticationData[pPlayer].pdataSize;
 	if (size > 0) // Prevent a zero-size write from clearing the persistent data entirely
@@ -268,7 +270,6 @@ std::filesystem::path ServerAuthenticationManager::GetOfflinePersistentDataPath(
 
 	return std::filesystem::path(filename);
 }
-
 
 // auth hooks
 

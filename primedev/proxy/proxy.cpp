@@ -12,16 +12,15 @@
 OriginProxy* g_originProxy;
 
 #define PROXY_SIMPLE_SUCCESS_DECL(name)                                                                                                    \
-	static OriginProxy::OriginError_t(__fastcall* o_p##name)() = nullptr;                                                                 \
-	static OriginProxy::OriginError_t __fastcall h_##name()                                                                               \
+	static OriginProxy::OriginError_t(__fastcall* o_p##name)() = nullptr;                                                                  \
+	static OriginProxy::OriginError_t __fastcall h_##name()                                                                                \
 	{                                                                                                                                      \
-		return OriginProxy::OriginError_t::ORIGIN_SUCCESS;                                                                                  \
+		return OriginProxy::OriginError_t::ORIGIN_SUCCESS;                                                                                 \
 	}
 
-#define PROXY_IMPL(name)                                                                                                    \
-	o_p##name = module.GetExportedFunction(#name).RCast<decltype(o_p##name)>();                                                        \
+#define PROXY_IMPL(name)                                                                                                                   \
+	o_p##name = module.GetExportedFunction(#name).RCast<decltype(o_p##name)>();                                                            \
 	HookAttach(&(PVOID&)o_p##name, (PVOID)h_##name);
-
 
 PROXY_SIMPLE_SUCCESS_DECL(OriginReadEnumerationSync);
 PROXY_SIMPLE_SUCCESS_DECL(OriginGrantAchievement);
@@ -33,7 +32,6 @@ static OriginProxy::OriginError_t __fastcall h_Tier0_GetOriginStartupResult()
 {
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
-
 
 static OriginProxy::OriginError_t(__fastcall* o_pOriginGetSettingSync)(int64_t inSettingg, char* outSettingBuff, size_t& outBuffSize) =
 	nullptr;
@@ -69,9 +67,9 @@ static OriginProxy::OriginError_t __fastcall h_OriginGetSettingSync(int64_t inSe
 		setting = BOOL_STR(originSettings->IsManualOffline);
 		break;
 
-		default:
-			NS::log::NORTHSTAR->warn("OriginGetSettingSync({}) does not map to any known setting", inSetting);
-			break;
+	default:
+		NS::log::NORTHSTAR->warn("OriginGetSettingSync({}) does not map to any known setting", inSetting);
+		break;
 	}
 
 #undef BOOL_STR
@@ -110,12 +108,12 @@ static const char** __fastcall h_OriginGetErrorInfo(int64_t errorCode)
 	return errorInfoStr;
 }
 
-static OriginProxy::OriginError_t(__fastcall* o_pOriginStartup)(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse) = nullptr;
+static OriginProxy::OriginError_t(__fastcall* o_pOriginStartup)(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse) =
+	nullptr;
 static OriginProxy::OriginError_t __fastcall h_OriginStartup(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse)
 {
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
-
 
 static OriginProxy::OriginId_t(__fastcall* o_pOriginGetDefaultUser)() = nullptr;
 static OriginProxy::OriginId_t __fastcall h_OriginGetDefaultUser()
@@ -155,7 +153,7 @@ static OriginProxy::OriginError_t(__fastcall* o_pOriginRequestAuthCode)(
 	uint64_t unk1, // 0
 	uint64_t unk2, // 3000
 	uint64_t unk3 // 0
-) = nullptr;
+	) = nullptr;
 
 static OriginProxy::OriginError_t __fastcall h_OriginRequestAuthCode(
 	int64_t userId,
@@ -188,7 +186,7 @@ static OriginProxy::OriginError_t __fastcall h_OriginQueryOffers(
 	uint64_t unk1, // 1
 	uint64_t unk2, // 0
 	uint64_t unk3, // 0
-	void(__fastcall* originQueryOffersResult)(void* unk1, uint64_t originHandle, uint64_t unk3), 
+	void(__fastcall* originQueryOffersResult)(void* unk1, uint64_t originHandle, uint64_t unk3),
 	uint64_t unk4, // 0
 	uint64_t unk5, // 1000
 	uint64_t unk6 // 0
@@ -197,7 +195,6 @@ static OriginProxy::OriginError_t __fastcall h_OriginQueryOffers(
 	originQueryOffersResult(nullptr, 0, 0); // Offer count + Offer ptr?
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
-
 
 #ifdef DEBUG_PROXY
 static const char**(__fastcall* o_pGetErrorString)(int64_t errorCode) = nullptr;
