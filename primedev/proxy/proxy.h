@@ -119,11 +119,12 @@ public:
 		ORIGIN_SUCCESS_PARTIAL_CONTENT = 1141440718, // 0x440900CE
 	};
 
+
 	OriginProxy();
 
-	const OriginGetProfileResult_t* GetProfile() { return &originProfile; };
-	const OriginSettings_t* GetSettings() { return &originSettings; };
-	OriginError_t GetOriginLastError() { return originLastErrorPtr ? *originLastErrorPtr : ORIGIN_SUCCESS; };
+	const OriginGetProfileResult_t* GetProfile() const { return &originProfile; };
+	const OriginSettings_t* GetSettings() const { return &originSettings; };
+	OriginError_t GetOriginLastError() const { return originLastErrorPtr ? *originLastErrorPtr : ORIGIN_SUCCESS; };
 
 private:
 	OriginId_t userId;

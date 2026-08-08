@@ -15,6 +15,8 @@
 #include "server/r2server.h"
 #include "proxy/lan.h"
 
+#include <shlobj_core.h>
+
 #include <fstream>
 #include <filesystem>
 #include <string>
@@ -153,14 +155,7 @@ void ServerAuthenticationManager::AuthenticatePlayer(CBaseClient* pPlayer, uint6
 	if (Cvar_ns_auth_allow_insecure_write->GetBool())
 	{
 		pPlayer->m_iPersistenceReady = ePersistenceReady::READY_INSECURE;
-		// Read offline data
-		std::ifstream localData("persistent.bin", std::ios::binary | std::ios::in);
-		if (localData.is_open())
-		{
-			ZeroMemory(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
-			localData.read(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
-		}
-
+		ReadOfflinePersistentData(pPlayer);
 		return;
 	}
 
@@ -223,17 +218,57 @@ void ServerAuthenticationManager::WritePersistentData(CBaseClient* pPlayer)
 	}
 	else if (Cvar_ns_auth_allow_insecure_write->GetBool())
 	{
-		const auto size = m_PlayerAuthenticationData[pPlayer].pdataSize;
-		if (size > 0) // Prevent a zero-size write from clearing the persistent data entirely
+		WriteOfflinePersistentData(pPlayer);
+	}
+}
+
+void ServerAuthenticationManager::ReadOfflinePersistentData(CBaseClient* pPlayer) {
+	// Read offline data
+	const auto path = GetOfflinePersistentDataPath();
+	std::ifstream localData(path, std::ios::binary | std::ios::in);
+	if (localData.is_open())
+	{
+		ZeroMemory(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
+		localData.read(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
+	}
+}
+
+void ServerAuthenticationManager::WriteOfflinePersistentData(CBaseClient* pPlayer) {
+
+	const auto size = m_PlayerAuthenticationData[pPlayer].pdataSize;
+	if (size > 0) // Prevent a zero-size write from clearing the persistent data entirely
+	{
+		const auto path = GetOfflinePersistentDataPath();
+		const auto dir = path.parent_path();
+		std::filesystem::create_directory(dir);
+
+		std::ofstream localData(path, std::ios::binary | std::ios::out);
+		if (localData.is_open())
 		{
-			std::ofstream localData("persistent.bin", std::ios::binary | std::ios::out);
-			if (localData.is_open())
-			{
-				localData.write(reinterpret_cast<const char*>(pPlayer->m_PersistenceBuffer), size);
-			}
+			localData.write(reinterpret_cast<const char*>(pPlayer->m_PersistenceBuffer), size);
 		}
 	}
 }
+
+std::filesystem::path ServerAuthenticationManager::GetOfflinePersistentDataPath()
+{
+	constexpr auto filename = "persistent.bin";
+
+	PWSTR appData = NULL;
+	if (SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE, NULL, &appData) == S_OK)
+	{
+		char dest[MAX_PATH];
+		wcstombs(dest, appData, MAX_PATH);
+
+		// Create a folder for northstar
+		std::filesystem::path appDataPath(dest);
+
+		return appDataPath / "Northstar" / filename;
+	}
+
+	return std::filesystem::path(filename);
+}
+
 
 // auth hooks
 

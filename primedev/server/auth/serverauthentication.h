@@ -53,6 +53,10 @@ public:
 	void AuthenticatePlayer(CBaseClient* pPlayer, uint64_t iUid, char* pAuthToken);
 	bool RemovePlayerAuthData(CBaseClient* pPlayer);
 	void WritePersistentData(CBaseClient* pPlayer);
+
+	void WriteOfflinePersistentData(CBaseClient* pPlayer);
+	void ReadOfflinePersistentData(CBaseClient* pPlayer);
+	std::filesystem::path GetOfflinePersistentDataPath();
 };
 
 extern ServerAuthenticationManager* g_pServerAuthentication;

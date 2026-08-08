@@ -1,7 +1,9 @@
 #include "proxy.h"
 #include "lan.h"
+#include "core/tier0.h"
 #include <random>
 #include <lmcons.h>
+#include <codecvt>
 
 // No DEBUG or _DEBUG macro in cmake?
 #define DEBUG_PROXY
@@ -37,6 +39,8 @@ static OriginProxy::OriginError_t(__fastcall* o_pOriginGetSettingSync)(int64_t i
 	nullptr;
 static OriginProxy::OriginError_t __fastcall h_OriginGetSettingSync(int64_t inSetting, char* outSettingBuff, size_t& outBuffSize)
 {
+#define BOOL_STR(x) x ? "true" : "false"
+
 	std::string setting {};
 	const auto originSettings = g_originProxy->GetSettings();
 	switch (inSetting)
@@ -46,33 +50,31 @@ static OriginProxy::OriginError_t __fastcall h_OriginGetSettingSync(int64_t inSe
 		break;
 
 	case 1:
-		setting = originSettings->Environment;
+		setting = originSettings->Environment; // Confirmed correct
 		break;
 
 	case 2:
-		setting = originSettings->Language;
+		setting = BOOL_STR(originSettings->IsIGOAvailable);
 		break;
 
 	case 3:
-		setting = std::to_string(originSettings->IsIGOAvailable);
+		setting = BOOL_STR(originSettings->IsIGOEnabled);
 		break;
 
 	case 4:
-		setting = std::to_string(originSettings->IsIGOEnabled);
+		setting = BOOL_STR(originSettings->IsTelemetryEnabled);
 		break;
 
 	case 5:
-		setting = std::to_string(originSettings->IsTelemetryEnabled);
-		break;
-
-	case 6:
-		setting = std::to_string(originSettings->IsManualOffline);
+		setting = BOOL_STR(originSettings->IsManualOffline);
 		break;
 
 		default:
 			NS::log::NORTHSTAR->warn("OriginGetSettingSync({}) does not map to any known setting", inSetting);
 			break;
 	}
+
+#undef BOOL_STR
 
 	strncpy(outSettingBuff, setting.c_str(), outBuffSize);
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
@@ -258,7 +260,7 @@ ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 		// "Return NULLPTR" on a function that is a prerequisite to all HTTP CURL requests
 		module.Offset(0x16F250 + 0xC00).Patch({0x33, 0xC0, 0xC3});
 
-		#if DEBUG
+#ifdef DEBUG_PROXY
 		// Extensive net task logging, not sure how to turn it on "the normal way"
 		module.Offset(0x25F5BC + 0xC00).NOP(2);
 		module.Offset(0x27839E + 0xC00).NOP(6);
@@ -266,7 +268,7 @@ ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 		module.Offset(0x2628E9 + 0xC00).NOP(2);
 		module.Offset(0x262FD1 + 0xC00).NOP(2);
 		module.Offset(0x265BCB + 0xC00).NOP(2);
-		#endif
+#endif
 	}
 }
 
@@ -274,29 +276,37 @@ OriginProxy::OriginProxy()
 {
 	CModule engineModule("engine.dll");
 	this->originLastErrorPtr = engineModule.Offset(0x13978264).RCast<const OriginProxy::OriginError_t*>();
-	this->wsaLastError = engineModule.Offset(0x7FFB2C652DD0 - 0x7FFB186B0000).RCast<uint32_t*>();
+	this->wsaLastError = engineModule.Offset(0x13FA2DD0).RCast<uint32_t*>();
 
-
-	// Windows-centric username, is there another way?
+	std::string personaName {};
+	const char* nameFromCommandLine {};
+	if (CommandLine()->CheckParm("-playername", &nameFromCommandLine))
 	{
-		CHAR username[UNLEN + 1];
-		DWORD unamelen = sizeof(username) / sizeof(*username);
-		bool success = GetUserNameA(username, &unamelen);
-
-		if (success)
+		strncpy_s(persona, ARRAYSIZE(persona), nameFromCommandLine, strlen(nameFromCommandLine));
+	}
+	else
+	{
+		// Windows-centric username, is there another way?
 		{
-			strncpy(persona, reinterpret_cast<const char*>(username), unamelen);
+			CHAR username[UNLEN + 1];
+			DWORD unamelen = sizeof(username) / sizeof(*username);
+			bool success = GetUserNameA(username, &unamelen);
+
+			if (success)
+			{
+				strncpy_s(persona, ARRAYSIZE(persona), reinterpret_cast<const char*>(username), unamelen);
+			}
 		}
 	}
 
-	strncpy(country, "France", ARRAYSIZE(persona));
+	strncpy(country, "France", ARRAYSIZE(country));
 
 	std::random_device rd;
 	std::mt19937_64 gen(rd());
 	std::uniform_int_distribution<uint64_t> dis;
 
 	userId = dis(gen);
-		
+
 	this->originProfile.Persona = persona;
 	this->originProfile.Country = country;
 	this->originProfile.AvatarId = avatarId;
@@ -307,5 +317,12 @@ OriginProxy::OriginProxy()
 	this->originSettings.IsIGOEnabled = false;
 	this->originSettings.IsManualOffline = false;
 	this->originSettings.IsTelemetryEnabled = true;
-	this->originSettings.Language = "French";
+
+	CModule tier0Module("tier0.dll");
+	static const char*(__fastcall * o_pDetectLanguage)() {};
+	o_pDetectLanguage = tier0Module.GetExportedFunction("DetectLanguage").RCast<decltype(o_pDetectLanguage)>();
+	if (o_pDetectLanguage)
+	{
+		this->originSettings.Language = o_pDetectLanguage();
+	}
 }
