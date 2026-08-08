@@ -255,6 +255,18 @@ ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 	if (g_LanMode->Enabled())
 	{
 		g_originProxy = new OriginProxy;
+		// "Return NULLPTR" on a function that is a prerequisite to all HTTP CURL requests
+		module.Offset(0x16F250 + 0xC00).Patch({0x33, 0xC0, 0xC3});
+
+		#if DEBUG
+		// Extensive net task logging, not sure how to turn it on "the normal way"
+		module.Offset(0x25F5BC + 0xC00).NOP(2);
+		module.Offset(0x27839E + 0xC00).NOP(6);
+		module.Offset(0x25F51F + 0xC00).NOP(2);
+		module.Offset(0x2628E9 + 0xC00).NOP(2);
+		module.Offset(0x262FD1 + 0xC00).NOP(2);
+		module.Offset(0x265BCB + 0xC00).NOP(2);
+		#endif
 	}
 }
 
@@ -262,6 +274,8 @@ OriginProxy::OriginProxy()
 {
 	CModule engineModule("engine.dll");
 	this->originLastErrorPtr = engineModule.Offset(0x13978264).RCast<const OriginProxy::OriginError_t*>();
+	this->g_wsaLastError = module.Offset(0x7FFB2C652DD0 - 0x7FFB186B0000).RCast<uint32_t*>();
+
 
 	// Windows-centric username, is there another way?
 	{

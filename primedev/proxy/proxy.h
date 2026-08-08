@@ -137,6 +137,8 @@ private:
 
 	const OriginError_t* originLastErrorPtr = nullptr;
 
+	const uint32_t* g_wsaLastError = nullptr;
+
 	static_assert(offsetof(OriginGetProfileResult_t, PersonaId) == 8);
 	static_assert(offsetof(OriginGetProfileResult_t, Persona) == 16); // 64 chars
 	static_assert(offsetof(OriginGetProfileResult_t, AvatarId) == 24); // 260 Chars
