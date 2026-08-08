@@ -119,7 +119,6 @@ public:
 		ORIGIN_SUCCESS_PARTIAL_CONTENT = 1141440718, // 0x440900CE
 	};
 
-
 	OriginProxy();
 
 	const OriginGetProfileResult_t* GetProfile() const { return &originProfile; };
