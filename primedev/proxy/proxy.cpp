@@ -274,7 +274,7 @@ OriginProxy::OriginProxy()
 {
 	CModule engineModule("engine.dll");
 	this->originLastErrorPtr = engineModule.Offset(0x13978264).RCast<const OriginProxy::OriginError_t*>();
-	this->g_wsaLastError = module.Offset(0x7FFB2C652DD0 - 0x7FFB186B0000).RCast<uint32_t*>();
+	this->wsaLastError = engineModule.Offset(0x7FFB2C652DD0 - 0x7FFB186B0000).RCast<uint32_t*>();
 
 
 	// Windows-centric username, is there another way?
