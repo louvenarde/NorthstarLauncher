@@ -4,7 +4,6 @@
 #include "proxy/lan.h"
 #include "tier1/convar.h"
 
-
 #include <regex>
 
 ServerPresenceManager* g_pServerPresence;

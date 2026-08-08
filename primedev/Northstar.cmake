@@ -197,7 +197,9 @@ add_library(
     "dllmain.cpp"
     "ns_version.h"
     "Northstar.def"
-     "proxy/proxy.cpp" "proxy/proxy.h")
+    "proxy/proxy.cpp"
+    "proxy/proxy.h"
+    )
 
 target_link_libraries(
     NorthstarDLL
