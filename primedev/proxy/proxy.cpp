@@ -12,15 +12,15 @@
 OriginProxy* g_originProxy;
 
 #define PROXY_SIMPLE_SUCCESS_DECL(name)                                                                                                    \
-	static OriginProxy::OriginError_t(__fastcall* o_p##name##)() = nullptr;                                                                 \
-	static OriginProxy::OriginError_t __fastcall h_##name##()                                                                               \
+	static OriginProxy::OriginError_t(__fastcall* o_p##name)() = nullptr;                                                                 \
+	static OriginProxy::OriginError_t __fastcall h_##name()                                                                               \
 	{                                                                                                                                      \
 		return OriginProxy::OriginError_t::ORIGIN_SUCCESS;                                                                                  \
 	}
 
 #define PROXY_IMPL(name)                                                                                                    \
-	o_p##name## = module.GetExportedFunction(#name).RCast<decltype(o_p##name##)>();                                                        \
-	HookAttach(&(PVOID&)o_p##name##, (PVOID)h_##name##);
+	o_p##name = module.GetExportedFunction(#name).RCast<decltype(o_p##name)>();                                                        \
+	HookAttach(&(PVOID&)o_p##name, (PVOID)h_##name);
 
 
 PROXY_SIMPLE_SUCCESS_DECL(OriginReadEnumerationSync);
