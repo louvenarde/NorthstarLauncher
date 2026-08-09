@@ -1,5 +1,5 @@
 #include "masterserver/masterserver.h"
-#include "core/convar/concommand.h"
+#include "tier1/cmd.h"
 #include "shared/playlist.h"
 #include "server/auth/serverauthentication.h"
 #include "core/tier0.h"
@@ -11,7 +11,7 @@
 #include "util/version.h"
 #include "server/auth/bansystem.h"
 #include "dedicated/dedicated.h"
-
+#include "proxy/proxy.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -19,6 +19,7 @@
 
 #include <cstring>
 #include <regex>
+#include <proxy/lan.h>
 
 using namespace std::chrono_literals;
 
@@ -92,6 +93,15 @@ void MasterServerManager::AuthenticateOriginWithMasterServer(const char* uid, co
 {
 	if (m_bOriginAuthWithMasterServerInProgress || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
+
+	if (g_LanMode->Enabled())
+	{
+		// Self auth if we're in LAN mode
+		ZeroMemory(m_sOwnClientAuthToken, sizeof(m_sOwnClientAuthToken));
+		m_sOwnClientAuthToken[0] = '\x01';
+		m_bOriginAuthWithMasterServerSuccessful = true;
+		return;
+	}
 
 	// do this here so it's instantly set
 	m_bOriginAuthWithMasterServerInProgress = true;
@@ -203,90 +213,125 @@ void MasterServerManager::RequestServerList()
 			m_bRequestingServerList = true;
 			m_bScriptRequestingServerList = true;
 
-			spdlog::info("Requesting server list from {}", Cvar_ns_masterserver_hostname->GetString());
-
-			CURL* curl = curl_easy_init();
-			SetCommonHttpClientOptions(curl);
-
-			std::string readBuffer;
-			curl_easy_setopt(curl, CURLOPT_URL, fmt::format("{}/client/servers", Cvar_ns_masterserver_hostname->GetString()).c_str());
-			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
-			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToStringBufferCallback);
-			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-
-			CURLcode result = curl_easy_perform(curl);
-			ScopeGuard cleanup(
-				[&]
-				{
-					m_bRequestingServerList = false;
-					m_bScriptRequestingServerList = false;
-					curl_easy_cleanup(curl);
-				});
-
-			if (result == CURLcode::CURLE_OK)
+			if (g_LanMode->Enabled())
 			{
-				m_bSuccessfullyConnected = true;
+				spdlog::info("Polling local area network for servers...");
 
-				rapidjson_document serverInfoJson;
-				serverInfoJson.Parse(readBuffer.c_str());
+				// TODO
+				// 1) Send stray  out of band packet on .255
+				// 2) Wait 1 second
+				// 3) Recv and list servers
 
-				if (serverInfoJson.HasParseError())
-				{
-					spdlog::error(
-						"Failed reading masterserver response: encountered parse error \"{}\"",
-						rapidjson::GetParseError_En(serverInfoJson.GetParseError()));
-					return;
-				}
+				// Cleanup
+				m_bRequestingServerList = false;
+				m_bScriptRequestingServerList = false;
+			}
+			else
+			{
+				spdlog::info("Requesting server list from {}", Cvar_ns_masterserver_hostname->GetString());
 
-				if (serverInfoJson.IsObject() && serverInfoJson.HasMember("error"))
-				{
-					spdlog::error("Failed reading masterserver response: got fastify error response");
-					spdlog::error(readBuffer);
-					return;
-				}
+				CURL* curl = curl_easy_init();
+				SetCommonHttpClientOptions(curl);
 
-				if (!serverInfoJson.IsArray())
-				{
-					spdlog::error("Failed reading masterserver response: root object is not an array");
-					return;
-				}
+				std::string readBuffer;
+				curl_easy_setopt(curl, CURLOPT_URL, fmt::format("{}/client/servers", Cvar_ns_masterserver_hostname->GetString()).c_str());
+				curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
+				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToStringBufferCallback);
+				curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
 
-				rapidjson::GenericArray<false, rapidjson_document::GenericValue> serverArray = serverInfoJson.GetArray();
-
-				spdlog::info("Got {} servers", serverArray.Size());
-
-				for (auto& serverObj : serverArray)
-				{
-					if (!serverObj.IsObject())
+				CURLcode result = curl_easy_perform(curl);
+				ScopeGuard cleanup(
+					[&]
 					{
-						spdlog::error("Failed reading masterserver response: member of server array is not an object");
+						m_bRequestingServerList = false;
+						m_bScriptRequestingServerList = false;
+						curl_easy_cleanup(curl);
+					});
+
+				if (result == CURLcode::CURLE_OK)
+				{
+					m_bSuccessfullyConnected = true;
+
+					rapidjson_document serverInfoJson;
+					serverInfoJson.Parse(readBuffer.c_str());
+
+					if (serverInfoJson.HasParseError())
+					{
+						spdlog::error(
+							"Failed reading masterserver response: encountered parse error \"{}\"",
+							rapidjson::GetParseError_En(serverInfoJson.GetParseError()));
 						return;
 					}
 
-					// todo: verify json props are fine before adding to m_remoteServers
-					if (!serverObj.HasMember("id") || !serverObj["id"].IsString() || !serverObj.HasMember("name") ||
-						!serverObj["name"].IsString() || !serverObj.HasMember("description") || !serverObj["description"].IsString() ||
-						!serverObj.HasMember("map") || !serverObj["map"].IsString() || !serverObj.HasMember("playlist") ||
-						!serverObj["playlist"].IsString() || !serverObj.HasMember("playerCount") || !serverObj["playerCount"].IsNumber() ||
-						!serverObj.HasMember("maxPlayers") || !serverObj["maxPlayers"].IsNumber() || !serverObj.HasMember("hasPassword") ||
-						!serverObj["hasPassword"].IsBool() || !serverObj.HasMember("modInfo") || !serverObj["modInfo"].HasMember("Mods") ||
-						!serverObj["modInfo"]["Mods"].IsArray())
+					if (serverInfoJson.IsObject() && serverInfoJson.HasMember("error"))
 					{
-						spdlog::error("Failed reading masterserver response: malformed server object");
-						continue;
-					};
+						spdlog::error("Failed reading masterserver response: got fastify error response");
+						spdlog::error(readBuffer);
+						return;
+					}
 
-					const char* id = serverObj["id"].GetString();
-
-					RemoteServerInfo* newServer = nullptr;
-
-					bool createNewServerInfo = true;
-					for (RemoteServerInfo& server : m_vRemoteServers)
+					if (!serverInfoJson.IsArray())
 					{
-						// if server already exists, update info rather than adding to it
-						if (!strncmp((const char*)server.id, id, 32))
+						spdlog::error("Failed reading masterserver response: root object is not an array");
+						return;
+					}
+
+					rapidjson::GenericArray<false, rapidjson_document::GenericValue> serverArray = serverInfoJson.GetArray();
+
+					spdlog::info("Got {} servers", serverArray.Size());
+
+					for (auto& serverObj : serverArray)
+					{
+						if (!serverObj.IsObject())
 						{
-							server = RemoteServerInfo(
+							spdlog::error("Failed reading masterserver response: member of server array is not an object");
+							return;
+						}
+
+						// todo: verify json props are fine before adding to m_remoteServers
+						if (!serverObj.HasMember("id") || !serverObj["id"].IsString() || !serverObj.HasMember("name") ||
+							!serverObj["name"].IsString() || !serverObj.HasMember("description") || !serverObj["description"].IsString() ||
+							!serverObj.HasMember("map") || !serverObj["map"].IsString() || !serverObj.HasMember("playlist") ||
+							!serverObj["playlist"].IsString() || !serverObj.HasMember("playerCount") ||
+							!serverObj["playerCount"].IsNumber() || !serverObj.HasMember("maxPlayers") ||
+							!serverObj["maxPlayers"].IsNumber() || !serverObj.HasMember("hasPassword") ||
+							!serverObj["hasPassword"].IsBool() || !serverObj.HasMember("modInfo") ||
+							!serverObj["modInfo"].HasMember("Mods") || !serverObj["modInfo"]["Mods"].IsArray())
+						{
+							spdlog::error("Failed reading masterserver response: malformed server object");
+							continue;
+						};
+
+						const char* id = serverObj["id"].GetString();
+
+						RemoteServerInfo* newServer = nullptr;
+
+						bool createNewServerInfo = true;
+						for (RemoteServerInfo& server : m_vRemoteServers)
+						{
+							// if server already exists, update info rather than adding to it
+							if (!strncmp((const char*)server.id, id, 32))
+							{
+								server = RemoteServerInfo(
+									id,
+									serverObj["name"].GetString(),
+									serverObj["description"].GetString(),
+									serverObj["map"].GetString(),
+									serverObj["playlist"].GetString(),
+									(serverObj.HasMember("region") && serverObj["region"].IsString()) ? serverObj["region"].GetString()
+																									  : "",
+									serverObj["playerCount"].GetInt(),
+									serverObj["maxPlayers"].GetInt(),
+									serverObj["hasPassword"].IsTrue());
+								newServer = &server;
+								createNewServerInfo = false;
+								break;
+							}
+						}
+
+						// server didn't exist
+						if (createNewServerInfo)
+							newServer = &m_vRemoteServers.emplace_back(
 								id,
 								serverObj["name"].GetString(),
 								serverObj["description"].GetString(),
@@ -296,61 +341,43 @@ void MasterServerManager::RequestServerList()
 								serverObj["playerCount"].GetInt(),
 								serverObj["maxPlayers"].GetInt(),
 								serverObj["hasPassword"].IsTrue());
-							newServer = &server;
-							createNewServerInfo = false;
-							break;
+
+						newServer->requiredMods.clear();
+						for (auto& requiredMod : serverObj["modInfo"]["Mods"].GetArray())
+						{
+							RemoteModInfo modInfo;
+
+							if (!requiredMod.HasMember("RequiredOnClient") || !requiredMod["RequiredOnClient"].IsTrue())
+								continue;
+
+							if (!requiredMod.HasMember("Name") || !requiredMod["Name"].IsString())
+								continue;
+							modInfo.Name = requiredMod["Name"].GetString();
+
+							if (!requiredMod.HasMember("Version") || !requiredMod["Version"].IsString())
+								continue;
+							modInfo.Version = requiredMod["Version"].GetString();
+
+							newServer->requiredMods.push_back(modInfo);
 						}
+						// Can probably re-enable this later with a -verbose flag, but slows down loading of the server browser quite a bit
+						// as is spdlog::info(
+						//	"Server {} on map {} with playlist {} has {}/{} players", serverObj["name"].GetString(),
+						//	serverObj["map"].GetString(), serverObj["playlist"].GetString(), serverObj["playerCount"].GetInt(),
+						//	serverObj["maxPlayers"].GetInt());
 					}
-
-					// server didn't exist
-					if (createNewServerInfo)
-						newServer = &m_vRemoteServers.emplace_back(
-							id,
-							serverObj["name"].GetString(),
-							serverObj["description"].GetString(),
-							serverObj["map"].GetString(),
-							serverObj["playlist"].GetString(),
-							(serverObj.HasMember("region") && serverObj["region"].IsString()) ? serverObj["region"].GetString() : "",
-							serverObj["playerCount"].GetInt(),
-							serverObj["maxPlayers"].GetInt(),
-							serverObj["hasPassword"].IsTrue());
-
-					newServer->requiredMods.clear();
-					for (auto& requiredMod : serverObj["modInfo"]["Mods"].GetArray())
-					{
-						RemoteModInfo modInfo;
-
-						if (!requiredMod.HasMember("RequiredOnClient") || !requiredMod["RequiredOnClient"].IsTrue())
-							continue;
-
-						if (!requiredMod.HasMember("Name") || !requiredMod["Name"].IsString())
-							continue;
-						modInfo.Name = requiredMod["Name"].GetString();
-
-						if (!requiredMod.HasMember("Version") || !requiredMod["Version"].IsString())
-							continue;
-						modInfo.Version = requiredMod["Version"].GetString();
-
-						newServer->requiredMods.push_back(modInfo);
-					}
-					// Can probably re-enable this later with a -verbose flag, but slows down loading of the server browser quite a bit as
-					// is
-					// spdlog::info(
-					//	"Server {} on map {} with playlist {} has {}/{} players", serverObj["name"].GetString(),
-					//	serverObj["map"].GetString(), serverObj["playlist"].GetString(), serverObj["playerCount"].GetInt(),
-					//	serverObj["maxPlayers"].GetInt());
 				}
+				else
+				{
+					spdlog::error("Failed requesting servers: error {}", curl_easy_strerror(result));
+					m_bSuccessfullyConnected = false;
+				}
+			}
 
-				std::sort(
-					m_vRemoteServers.begin(),
-					m_vRemoteServers.end(),
-					[](RemoteServerInfo& a, RemoteServerInfo& b) { return a.playerCount > b.playerCount; });
-			}
-			else
-			{
-				spdlog::error("Failed requesting servers: error {}", curl_easy_strerror(result));
-				m_bSuccessfullyConnected = false;
-			}
+			std::sort(
+				m_vRemoteServers.begin(),
+				m_vRemoteServers.end(),
+				[](RemoteServerInfo& a, RemoteServerInfo& b) { return a.playerCount > b.playerCount; });
 		});
 
 	requestThread.detach();
@@ -359,6 +386,11 @@ void MasterServerManager::RequestServerList()
 void MasterServerManager::RequestMainMenuPromos()
 {
 	m_bHasMainMenuPromoData = false;
+	if (g_LanMode->Enabled())
+	{
+		m_bSuccessfullyConnected = true;
+		return;
+	}
 
 	std::thread requestThread(
 		[this]()
@@ -466,6 +498,12 @@ void MasterServerManager::AuthenticateWithOwnServer(const char* uid, const char*
 	// dont wait, just stop if we're trying to do 2 auth requests at once
 	if (m_bAuthenticatingWithGameServer || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
+
+	if (g_LanMode->Enabled())
+	{
+		AuthenticateOffline(uid);
+		return;
+	}
 
 	m_bAuthenticatingWithGameServer = true;
 	m_bScriptAuthenticatingWithGameServer = true;
@@ -734,6 +772,43 @@ void MasterServerManager::AuthenticateWithServer(const char* uid, const char* pl
 		});
 
 	requestThread.detach();
+}
+
+void MasterServerManager::AuthenticateOffline(const char* uid)
+{
+	m_bSuccessfullyConnected = true;
+	m_bSuccessfullyAuthenticatedWithGameServer = true;
+	m_bScriptAuthenticatingWithGameServer = true;
+
+	const auto profile = g_originProxy->GetProfile();
+
+	RemoteAuthData newAuthData {};
+	strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), uid, sizeof(newAuthData.uid) - 1);
+	strncpy_s(newAuthData.username, sizeof(newAuthData.username), profile->Persona, sizeof(newAuthData.username) - 1);
+
+	newAuthData.pdataSize = PERSISTENCE_MAX_SIZE;
+	newAuthData.pdata = new char[PERSISTENCE_MAX_SIZE];
+	ZeroMemory(newAuthData.pdata, newAuthData.pdataSize);
+
+	const auto authToken = "1";
+
+	std::lock_guard<std::mutex> guard(g_pServerAuthentication->m_AuthDataMutex);
+	g_pServerAuthentication->m_RemoteAuthenticationData.clear();
+	g_pServerAuthentication->m_RemoteAuthenticationData.insert(std::make_pair(authToken, newAuthData));
+
+	ScopeGuard cleanup(
+		[&]
+		{
+			m_bAuthenticatingWithGameServer = false;
+			m_bScriptAuthenticatingWithGameServer = false;
+
+			if (m_bNewgameAfterSelfAuth)
+			{
+				// pretty sure this is threadsafe?
+				Cbuf_AddText(Cbuf_GetCurrentPlayer(), "ns_end_reauth_and_leave_to_lobby", cmd_source_t::kCommandSrcCode);
+				m_bNewgameAfterSelfAuth = false;
+			}
+		});
 }
 
 void MasterServerManager::WritePlayerPersistentData(const char* playerId, const char* pdata, size_t pdataSize)
@@ -1062,11 +1137,14 @@ void MasterServerPresenceReporter::DestroyPresence(const ServerPresence* pServer
 		return;
 	}
 
+	auto url =
+		fmt::format("{}/server/remove_server?id={}", Cvar_ns_masterserver_hostname->GetString(), g_pMasterServerManager->m_sOwnServerId);
+
 	// Not bothering with better thread safety in this case since DestroyPresence() is called when the game is shutting down.
 	*g_pMasterServerManager->m_sOwnServerId = 0;
 
 	std::thread requestThread(
-		[this]
+		[this, url]
 		{
 			CURL* curl = curl_easy_init();
 			SetCommonHttpClientOptions(curl);
@@ -1075,12 +1153,7 @@ void MasterServerPresenceReporter::DestroyPresence(const ServerPresence* pServer
 			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToStringBufferCallback);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-			curl_easy_setopt(
-				curl,
-				CURLOPT_URL,
-				fmt::format(
-					"{}/server/remove_server?id={}", Cvar_ns_masterserver_hostname->GetString(), g_pMasterServerManager->m_sOwnServerId)
-					.c_str());
+			curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
 			CURLcode result = curl_easy_perform(curl);
 			curl_easy_cleanup(curl);

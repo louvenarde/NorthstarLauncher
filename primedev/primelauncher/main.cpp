@@ -165,6 +165,8 @@ void AwaitOriginStartup()
 
 void EnsureOriginStarted()
 {
+	return; // Do not start origin
+
 	if (GetProcessByName(L"Origin.exe") || GetProcessByName(L"EADesktop.exe"))
 		return; // already started
 
@@ -364,14 +366,28 @@ int main(int argc, char* argv[])
 	bool noOriginStartup = false;
 	bool dedicated = false;
 	bool nostubs = false;
+	bool noWindow = false;
+	bool noShaderApi = false;
 
 	for (int i = 0; i < argc; i++)
+	{
 		if (!strcmp(argv[i], "-noOriginStartup"))
 			noOriginStartup = true;
 		else if (!strcmp(argv[i], "-dedicated")) // also checked by Northstar.dll
 			dedicated = true;
 		else if (!strcmp(argv[i], "-nostubs"))
 			nostubs = true;
+		else if (!strcmp(argv[i], "-nowindow"))
+			noWindow = true;
+		else if (!strcmp(argv[i], "-noshaderapi"))
+			noShaderApi = true;
+	}
+
+	if (noWindow && (!dedicated || !noShaderApi))
+	{
+		std::cerr << "[*] ERROR: -nowindow requires -dedicated and -noshaderapi" << std::endl;
+		return 1;
+	}
 
 	if (!noOriginStartup && !dedicated)
 	{

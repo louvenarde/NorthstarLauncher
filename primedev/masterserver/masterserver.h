@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/convar/convar.h"
+#include "tier1/convar.h"
 #include "server/serverpresence.h"
 #include <winsock2.h>
 #include <string>
@@ -134,6 +134,9 @@ public:
 	void AuthenticateWithServer(const char* uid, const char* playerToken, RemoteServerInfo server, const char* password);
 	void WritePlayerPersistentData(const char* playerId, const char* pdata, size_t pdataSize);
 	void ProcessConnectionlessPacketSigreq1(std::string req);
+
+private:
+	void AuthenticateOffline(const char* uid);
 };
 
 extern MasterServerManager* g_pMasterServerManager;

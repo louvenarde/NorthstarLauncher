@@ -8,6 +8,7 @@
 #include "shared/exploit_fixes/ns_limits.h"
 #include "squirrel/squirrel.h"
 #include "plugins/pluginmanager.h"
+#include <proxy/lan.h>
 
 CHostState* g_pHostState;
 
@@ -58,6 +59,13 @@ static void __fastcall h_CHostState__State_NewGame(CHostState* self)
 
 	Cbuf_AddText(Cbuf_GetCurrentPlayer(), "exec autoexec_ns_server", cmd_source_t::kCommandSrcCode);
 	Cbuf_Execute();
+
+	// LAN Mode is always insecure mode
+	if (g_LanMode->Enabled())
+	{
+		g_pServerAuthentication->Cvar_ns_auth_allow_insecure->SetValue(true);
+		g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->SetValue(true);
+	}
 
 	// need to do this to ensure we don't go to private match
 	if (g_pServerAuthentication->m_bNeedLocalAuthForNewgame)

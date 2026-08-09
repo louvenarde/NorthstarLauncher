@@ -1,9 +1,15 @@
 #include "origin.h"
+#include "proxy/lan.h"
 #include <cstdint>
 
 static bool(__fastcall* o_pCheckIfOriginIsInstalled)() = nullptr;
 static bool __fastcall h_CheckIfOriginIsInstalled()
 {
+	if (g_LanMode->Enabled())
+	{
+		return false;
+	}
+
 	if (!strstr(GetCommandLineA(), "-noOriginStartup"))
 		return o_pCheckIfOriginIsInstalled();
 
@@ -21,6 +27,11 @@ static bool __fastcall h_CheckIfOriginIsInstalled()
 static uint64_t(__fastcall* o_pTryToStartOrigin)(void* a1) = nullptr;
 static uint64_t __fastcall h_TryToStartOrigin(void* a1)
 {
+	if (g_LanMode->Enabled())
+	{
+		return 0;
+	}
+
 	if (!strstr(GetCommandLineA(), "-noOriginStartup"))
 		return o_pTryToStartOrigin(a1);
 
@@ -35,7 +46,6 @@ static uint64_t __fastcall h_TryToStartOrigin(void* a1)
 ON_DLL_LOAD("OriginSDK.dll", OriginSDKFuncs, (CModule module))
 {
 	// these hooks are required for linux to work without EA app or Origin in the same wine prefix
-
 	o_pCheckIfOriginIsInstalled = module.Offset(0xa1850).RCast<decltype(o_pCheckIfOriginIsInstalled)>();
 	HookAttach(&(PVOID&)o_pCheckIfOriginIsInstalled, (PVOID)h_CheckIfOriginIsInstalled);
 

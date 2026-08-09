@@ -3,6 +3,7 @@
 #include "server/auth/serverauthentication.h"
 #include "engine/r2engine.h"
 #include "client/r2client.h"
+#include "proxy/lan.h"
 
 // functions for viewing server browser
 
@@ -117,6 +118,7 @@ ADD_SQFUNC("void", NSConnectToAuthedServer, "", "", ScriptContext::UI)
 ADD_SQFUNC("void", NSTryAuthWithLocalServer, "", "", ScriptContext::UI)
 {
 	NOTE_UNUSED(sqvm);
+
 	// do auth request
 	g_pMasterServerManager->AuthenticateWithOwnServer(g_pLocalPlayerUserID, g_pMasterServerManager->m_sOwnClientAuthToken);
 

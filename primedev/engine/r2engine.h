@@ -126,7 +126,9 @@ typedef struct netpacket_s
 {
 	netadr_t adr; // sender address
 	// int				source;		// received source
-	char unk[10];
+	char unk[2];
+	uint32_t sockIndex;
+	uint32_t unk3;
 	double received_time;
 	unsigned char* data; // pointer to raw packet data
 	void* message; // easy bitbuf data access // 'inpacket.message' etc etc (pointer)
@@ -140,6 +142,22 @@ typedef struct netpacket_s
 	// struct netpacket_s* pNext;	// for internal use, should be NULL in public
 } netpacket_t;
 #pragma pack(pop)
+
+static_assert(offsetof(netpacket_s, sockIndex) == 24);
+
+#pragma pack(push, 1)
+struct netsocket_t
+{
+	char pad[8];
+	uint32_t receiveSocket;
+	uint32_t sendSocket;
+	uint64_t unk1;
+};
+#pragma pack(pop)
+
+static_assert(offsetof(netsocket_t, receiveSocket) == 8);
+static_assert(offsetof(netsocket_t, sendSocket) == 12);
+static_assert(sizeof(netsocket_t) == 24);
 
 // #56169 $DB69 PData size
 // #512   $200	Trailing data

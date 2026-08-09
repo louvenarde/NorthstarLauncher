@@ -16,7 +16,8 @@ void HookSys_Init();
 inline void HookAttach(PVOID* ppOriginal, PVOID pDetour)
 {
 	PVOID pAddr = *ppOriginal;
-	if (MH_CreateHook(pAddr, pDetour, ppOriginal) == MH_OK)
+	const auto result = MH_CreateHook(pAddr, pDetour, ppOriginal);
+	if (result == MH_OK)
 	{
 		if (MH_EnableHook(pAddr) != MH_OK)
 		{

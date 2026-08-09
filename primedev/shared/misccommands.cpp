@@ -1,5 +1,5 @@
 #include "misccommands.h"
-#include "core/convar/concommand.h"
+#include "tier1/cmd.h"
 #include "shared/playlist.h"
 #include "engine/r2engine.h"
 #include "client/r2client.h"
@@ -9,6 +9,7 @@
 #include "mods/modmanager.h"
 #include "server/auth/serverauthentication.h"
 #include "squirrel/squirrel.h"
+#include <proxy/lan.h>
 
 void ConCommand_force_newgame(const CCommand& arg)
 {

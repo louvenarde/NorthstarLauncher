@@ -9,6 +9,7 @@
 #include "util/wininfo.h"
 #include "squirrel/squirrel.h"
 #include "server/serverpresence.h"
+#include "proxy/lan.h"
 
 #include "windows/libsys.h"
 
@@ -62,6 +63,8 @@ bool InitialiseNorthstar()
 	// determine if we are in vanilla-compatibility mode
 	g_pVanillaCompatibility = new VanillaCompatibility();
 	g_pVanillaCompatibility->SetVanillaCompatibility(strstr(GetCommandLineA(), "-vanilla") != NULL);
+
+	g_LanMode = new LanMode(strstr(GetCommandLineA(), "-lan") != NULL);
 
 	// Write launcher version to log
 	StartupLog();

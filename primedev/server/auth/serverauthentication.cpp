@@ -1,18 +1,21 @@
 #include "serverauthentication.h"
 #include "shared/exploit_fixes/ns_limits.h"
-#include "core/convar/cvar.h"
-#include "core/convar/convar.h"
+#include "tier1/cvar.h"
+#include "tier1/convar.h"
 #include "masterserver/masterserver.h"
 #include "server/serverpresence.h"
 #include "engine/hoststate.h"
 #include "bansystem.h"
-#include "core/convar/concommand.h"
+#include "tier1/cmd.h"
 #include "dedicated/dedicated.h"
 #include "config/profile.h"
 #include "core/tier0.h"
 #include "engine/r2engine.h"
 #include "client/r2client.h"
 #include "server/r2server.h"
+#include "proxy/lan.h"
+
+#include <shlobj_core.h>
 
 #include <fstream>
 #include <filesystem>
@@ -149,6 +152,13 @@ void ServerAuthenticationManager::AuthenticatePlayer(CBaseClient* pPlayer, uint6
 		return;
 	}
 
+	if (Cvar_ns_auth_allow_insecure_write->GetBool())
+	{
+		pPlayer->m_iPersistenceReady = ePersistenceReady::READY_INSECURE;
+		ReadOfflinePersistentData(pPlayer);
+		return;
+	}
+
 	std::lock_guard<std::mutex> guard(m_AuthDataMutex);
 	auto authData = m_RemoteAuthenticationData.find(pAuthToken);
 	if (authData != m_RemoteAuthenticationData.end())
@@ -208,8 +218,57 @@ void ServerAuthenticationManager::WritePersistentData(CBaseClient* pPlayer)
 	}
 	else if (Cvar_ns_auth_allow_insecure_write->GetBool())
 	{
-		// todo: write pdata to disk here
+		WriteOfflinePersistentData(pPlayer);
 	}
+}
+
+void ServerAuthenticationManager::ReadOfflinePersistentData(CBaseClient* pPlayer)
+{
+	// Read offline data
+	const auto path = GetOfflinePersistentDataPath();
+	std::ifstream localData(path, std::ios::binary | std::ios::in);
+	if (localData.is_open())
+	{
+		ZeroMemory(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
+		localData.read(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
+	}
+}
+
+void ServerAuthenticationManager::WriteOfflinePersistentData(CBaseClient* pPlayer)
+{
+
+	const auto size = m_PlayerAuthenticationData[pPlayer].pdataSize;
+	if (size > 0) // Prevent a zero-size write from clearing the persistent data entirely
+	{
+		const auto path = GetOfflinePersistentDataPath();
+		const auto dir = path.parent_path();
+		std::filesystem::create_directory(dir);
+
+		std::ofstream localData(path, std::ios::binary | std::ios::out);
+		if (localData.is_open())
+		{
+			localData.write(reinterpret_cast<const char*>(pPlayer->m_PersistenceBuffer), size);
+		}
+	}
+}
+
+std::filesystem::path ServerAuthenticationManager::GetOfflinePersistentDataPath()
+{
+	constexpr auto filename = "persistent.bin";
+
+	PWSTR appData = NULL;
+	if (SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE, NULL, &appData) == S_OK)
+	{
+		char dest[MAX_PATH];
+		wcstombs(dest, appData, MAX_PATH);
+
+		// Create a folder for northstar
+		std::filesystem::path appDataPath(dest);
+
+		return appDataPath / "Northstar" / filename;
+	}
+
+	return std::filesystem::path(filename);
 }
 
 // auth hooks
@@ -394,6 +453,13 @@ ON_DLL_LOAD_RELIESON("engine.dll", ServerAuthentication, (ConCommand, ConVar), (
 		"0",
 		FCVAR_GAMEDLL,
 		"Whether the pdata of unauthenticated clients will be written to disk when changed");
+
+	// LAN Mode is always insecure mode
+	if (g_LanMode->Enabled())
+	{
+		g_pServerAuthentication->Cvar_ns_auth_allow_insecure->SetValue(true);
+		g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->SetValue(true);
+	}
 
 	RegisterConCommand(
 		"ns_resetpersistence", ConCommand_ns_resetpersistence, "resets your pdata when you next enter the lobby", FCVAR_NONE);
