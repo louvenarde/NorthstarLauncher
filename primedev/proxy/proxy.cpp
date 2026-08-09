@@ -5,6 +5,26 @@
 #include <lmcons.h>
 #include <codecvt>
 
+#define YES true
+#define NO false
+///////////////////////////
+//
+// The current consensus at Northstar is that proxying Origin locally is an act of piracy
+//	because in offline LAN mode, the game no longer requires online license verification.
+//
+// The day this consensus evolves, this variable can be switched to "NO" to ensure
+//	the game's playability completely offline.
+//
+// Until then, Origin and online access will be kept mandatory for offline play.
+//
+
+constexpr bool IS_REMOVING_DRM_LOCALLY_PIRACY = YES;
+
+//
+///////////////////////////
+#undef YES
+#undef NO
+
 // No DEBUG or _DEBUG macro in cmake?
 #if DEBUG
 #define DEBUG_PROXY
@@ -137,8 +157,11 @@ ON_DLL_LOAD("tier0.dll", Tier0Proxy, (CModule module))
 {
 	if (g_LanMode->Enabled())
 	{
-		const auto o_pTier0_GetOriginStartupResult = module.GetExportedFunction("Tier0_GetOriginStartupResult");
-		HookAttach(&(PVOID&)o_pTier0_GetOriginStartupResult, (PVOID)h_Tier0_GetOriginStartupResult);
+		if (!IS_REMOVING_DRM_LOCALLY_PIRACY)
+		{
+			const auto o_pTier0_GetOriginStartupResult = module.GetExportedFunction("Tier0_GetOriginStartupResult");
+			HookAttach(&(PVOID&)o_pTier0_GetOriginStartupResult, (PVOID)h_Tier0_GetOriginStartupResult);
+		}
 	}
 }
 
@@ -187,18 +210,21 @@ ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 {
 	if (g_LanMode->Enabled())
 	{
-		PROXY_IMPL(OriginGetSettingSync);
-		PROXY_IMPL(OriginStartup);
-		PROXY_IMPL(OriginGetDefaultUser);
-		PROXY_IMPL(OriginGetDefaultPersona);
-		PROXY_IMPL(OriginReadEnumerationSync);
-		PROXY_IMPL(OriginGrantAchievement);
-		PROXY_IMPL(OriginCheckOnline);
-		PROXY_IMPL(OriginSetPresence);
-		PROXY_IMPL(OriginUpdate);
-		PROXY_IMPL(OriginGetProfile);
-		PROXY_IMPL(OriginQueryOffers);
-		PROXY_IMPL(OriginRequestAuthCode);
+		if (!IS_REMOVING_DRM_LOCALLY_PIRACY)
+		{
+			PROXY_IMPL(OriginStartup);
+			PROXY_IMPL(OriginGetSettingSync);
+			PROXY_IMPL(OriginGetDefaultUser);
+			PROXY_IMPL(OriginGetDefaultPersona);
+			PROXY_IMPL(OriginReadEnumerationSync);
+			PROXY_IMPL(OriginGrantAchievement);
+			PROXY_IMPL(OriginCheckOnline);
+			PROXY_IMPL(OriginSetPresence);
+			PROXY_IMPL(OriginUpdate);
+			PROXY_IMPL(OriginGetProfile);
+			PROXY_IMPL(OriginQueryOffers);
+			PROXY_IMPL(OriginRequestAuthCode);
+		}
 
 #ifdef DEBUG_PROXY
 		o_pOriginGetErrorInfo = module.GetExportedFunction("OriginGetErrorInfo").RCast<decltype(o_pOriginGetErrorInfo)>();

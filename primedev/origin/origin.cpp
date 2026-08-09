@@ -5,11 +5,6 @@
 static bool(__fastcall* o_pCheckIfOriginIsInstalled)() = nullptr;
 static bool __fastcall h_CheckIfOriginIsInstalled()
 {
-	if (g_LanMode->Enabled())
-	{
-		return false;
-	}
-
 	if (!strstr(GetCommandLineA(), "-noOriginStartup"))
 		return o_pCheckIfOriginIsInstalled();
 
