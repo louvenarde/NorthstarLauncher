@@ -6,35 +6,30 @@
 #include <codecvt>
 
 // No DEBUG or _DEBUG macro in cmake?
+#if DEBUG
 #define DEBUG_PROXY
+#endif
 
 // global vars
 OriginProxy* g_originProxy;
 
 #define PROXY_SIMPLE_SUCCESS_DECL(name)                                                                                                    \
-	static OriginProxy::OriginError_t(__fastcall* o_p##name)() = nullptr;                                                                  \
 	static OriginProxy::OriginError_t __fastcall h_##name()                                                                                \
 	{                                                                                                                                      \
 		return OriginProxy::OriginError_t::ORIGIN_SUCCESS;                                                                                 \
 	}
 
 #define PROXY_IMPL(name)                                                                                                                   \
-	o_p##name = module.GetExportedFunction(#name).RCast<decltype(o_p##name)>();                                                            \
+	const auto o_p##name = module.GetExportedFunction(#name);                                                                              \
 	HookAttach(&(PVOID&)o_p##name, (PVOID)h_##name);
 
 PROXY_SIMPLE_SUCCESS_DECL(OriginReadEnumerationSync);
 PROXY_SIMPLE_SUCCESS_DECL(OriginGrantAchievement);
 PROXY_SIMPLE_SUCCESS_DECL(OriginSetPresence);
 PROXY_SIMPLE_SUCCESS_DECL(OriginUpdate);
+PROXY_SIMPLE_SUCCESS_DECL(OriginStartup);
+PROXY_SIMPLE_SUCCESS_DECL(Tier0_GetOriginStartupResult);
 
-static OriginProxy::OriginError_t(__fastcall* o_pTier0_GetOriginStartupResult)() = nullptr;
-static OriginProxy::OriginError_t __fastcall h_Tier0_GetOriginStartupResult()
-{
-	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
-}
-
-static OriginProxy::OriginError_t(__fastcall* o_pOriginGetSettingSync)(int64_t inSettingg, char* outSettingBuff, size_t& outBuffSize) =
-	nullptr;
 static OriginProxy::OriginError_t __fastcall h_OriginGetSettingSync(int64_t inSetting, char* outSettingBuff, size_t& outBuffSize)
 {
 #define BOOL_STR(x) x ? "true" : "false"
@@ -78,62 +73,22 @@ static OriginProxy::OriginError_t __fastcall h_OriginGetSettingSync(int64_t inSe
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
-static const char*(__fastcall* o_pOriginGetErrorDescription)(int64_t errorCode) = nullptr;
-static const char* __fastcall h_OriginGetErrorDescription(int64_t errorCode)
-{
-	const char* errorInfoStr = o_pOriginGetErrorDescription(errorCode);
-
-	NS::log::NORTHSTAR->warn("h_OriginGetErrorDescription({}) => {}", errorCode, errorInfoStr);
-
-	if (errorCode != 0)
-	{
-		__debugbreak();
-	}
-
-	return errorInfoStr;
-}
-
-static const char**(__fastcall* o_pOriginGetErrorInfo)(int64_t errorCode) = nullptr;
-static const char** __fastcall h_OriginGetErrorInfo(int64_t errorCode)
-{
-	const char** errorInfoStr = o_pOriginGetErrorInfo(errorCode);
-
-	NS::log::NORTHSTAR->warn("h_OriginGetErrorInfo({}) => {}", errorCode, *errorInfoStr);
-
-	if (errorCode != 0)
-	{
-		__debugbreak();
-	}
-
-	return errorInfoStr;
-}
-
-static OriginProxy::OriginError_t(__fastcall* o_pOriginStartup)(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse) =
-	nullptr;
-static OriginProxy::OriginError_t __fastcall h_OriginStartup(unsigned int a1, unsigned __int16 a2, void* a3, OUT void* outResponse)
-{
-	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
-}
-
-static OriginProxy::OriginId_t(__fastcall* o_pOriginGetDefaultUser)() = nullptr;
 static OriginProxy::OriginId_t __fastcall h_OriginGetDefaultUser()
 {
 	return g_originProxy->GetProfile()->UserId;
 }
 
-static const char*(__fastcall* o_pOriginGetDefaultPersona)() = nullptr;
 static const char* __fastcall h_OriginGetDefaultPersona()
 {
 	return g_originProxy->GetProfile()->Persona;
 }
 
-static const OriginProxy::OriginError_t(__fastcall* o_pOriginCheckOnline)(bool& isOnline) = nullptr;
 static const OriginProxy::OriginError_t __fastcall h_OriginCheckOnline(bool& isOnline)
 {
 	isOnline = true;
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
-static OriginProxy::OriginId_t(__fastcall* o_pOriginGetProfile)() = nullptr;
+
 static OriginProxy::OriginError_t __fastcall h_OriginGetProfile(
 	uint64_t unk1,
 	uint64_t unk2,
@@ -145,15 +100,6 @@ static OriginProxy::OriginError_t __fastcall h_OriginGetProfile(
 
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
-
-static OriginProxy::OriginError_t(__fastcall* o_pOriginRequestAuthCode)(
-	int64_t userId,
-	const char* clientId, // TITANFALL2-PC-SERVER
-	void(__fastcall* callbackWithProfile)(void* unk1, const char* unk2),
-	uint64_t unk1, // 0
-	uint64_t unk2, // 3000
-	uint64_t unk3 // 0
-	) = nullptr;
 
 static OriginProxy::OriginError_t __fastcall h_OriginRequestAuthCode(
 	int64_t userId,
@@ -171,15 +117,6 @@ static OriginProxy::OriginError_t __fastcall h_OriginRequestAuthCode(
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
-static OriginProxy::OriginError_t(__fastcall* o_pOriginQueryOffers)(
-	int64_t userId,
-	const char* name, // Origin.CTY.50.0000068
-	void(__fastcall* callbackWithProfile)(void* unk1, const char* unk2),
-	uint64_t unk1, // 0
-	uint64_t unk2, // 3000
-	uint64_t unk3 // 0
-	) = nullptr;
-
 static OriginProxy::OriginError_t __fastcall h_OriginQueryOffers(
 	int64_t userId,
 	const char* name, // Origin.CTY.50.0000068
@@ -196,40 +133,61 @@ static OriginProxy::OriginError_t __fastcall h_OriginQueryOffers(
 	return OriginProxy::OriginError_t::ORIGIN_SUCCESS;
 }
 
+ON_DLL_LOAD("tier0.dll", Tier0Proxy, (CModule module))
+{
+	if (g_LanMode->Enabled())
+	{
+		const auto o_pTier0_GetOriginStartupResult = module.GetExportedFunction("Tier0_GetOriginStartupResult");
+		HookAttach(&(PVOID&)o_pTier0_GetOriginStartupResult, (PVOID)h_Tier0_GetOriginStartupResult);
+	}
+}
+
 #ifdef DEBUG_PROXY
 static const char**(__fastcall* o_pGetErrorString)(int64_t errorCode) = nullptr;
 static const char** __fastcall h_GetErrorString(int64_t errorCode)
 {
 	const char** errorInfoStr = o_pGetErrorString(errorCode);
 
-	NS::log::NORTHSTAR->warn("h_GetErrorString({}) => {}", errorCode, *errorInfoStr);
+	if (errorCode != 0)
+	{
+		NS::log::NORTHSTAR->warn("h_GetErrorString({}) => {}", errorCode, *errorInfoStr);
+	}
+
+	return errorInfoStr;
+}
+
+static const char*(__fastcall* o_pOriginGetErrorDescription)(int64_t errorCode) = nullptr;
+static const char* __fastcall h_OriginGetErrorDescription(int64_t errorCode)
+{
+	const char* errorInfoStr = o_pOriginGetErrorDescription(errorCode);
 
 	if (errorCode != 0)
 	{
-		__debugbreak();
+		NS::log::NORTHSTAR->warn("h_OriginGetErrorDescription({}) => {}", errorCode, errorInfoStr);
+	}
+
+	return errorInfoStr;
+}
+
+static const char**(__fastcall* o_pOriginGetErrorInfo)(int64_t errorCode) = nullptr;
+static const char** __fastcall h_OriginGetErrorInfo(int64_t errorCode)
+{
+	const char** errorInfoStr = o_pOriginGetErrorInfo(errorCode);
+
+	if (errorCode != 0)
+	{
+		NS::log::NORTHSTAR->warn("h_OriginGetErrorInfo({}) => {}", errorCode, *errorInfoStr);
 	}
 
 	return errorInfoStr;
 }
 #endif
 
-ON_DLL_LOAD("tier0.dll", Tier0Proxy, (CModule module))
-{
-	if (g_LanMode->Enabled())
-	{
-		o_pTier0_GetOriginStartupResult =
-			module.GetExportedFunction("Tier0_GetOriginStartupResult").RCast<decltype(o_pTier0_GetOriginStartupResult)>();
-		HookAttach(&(PVOID&)o_pTier0_GetOriginStartupResult, (PVOID)h_Tier0_GetOriginStartupResult);
-	}
-}
-
 ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 {
 	if (g_LanMode->Enabled())
 	{
 		PROXY_IMPL(OriginGetSettingSync);
-		PROXY_IMPL(OriginGetErrorInfo);
-		PROXY_IMPL(OriginGetErrorDescription);
 		PROXY_IMPL(OriginStartup);
 		PROXY_IMPL(OriginGetDefaultUser);
 		PROXY_IMPL(OriginGetDefaultPersona);
@@ -243,6 +201,13 @@ ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 		PROXY_IMPL(OriginRequestAuthCode);
 
 #ifdef DEBUG_PROXY
+		o_pOriginGetErrorInfo = module.GetExportedFunction("OriginGetErrorInfo").RCast<decltype(o_pOriginGetErrorInfo)>();
+		HookAttach(&(PVOID&)o_pOriginGetErrorInfo, (PVOID)h_OriginGetErrorInfo);
+
+		o_pOriginGetErrorDescription =
+			module.GetExportedFunction("OriginGetErrorDescription").RCast<decltype(o_pOriginGetErrorDescription)>();
+		HookAttach(&(PVOID&)o_pOriginGetErrorDescription, (PVOID)h_OriginGetErrorDescription);
+
 		o_pGetErrorString = module.Offset(0x190D4).RCast<decltype(o_pGetErrorString)>();
 		HookAttach(&(PVOID&)o_pGetErrorString, (PVOID)h_GetErrorString);
 #endif
