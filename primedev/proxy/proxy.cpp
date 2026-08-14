@@ -1,9 +1,14 @@
 #include "proxy.h"
 #include "lan.h"
 #include "core/tier0.h"
+#include "engine/r2engine.h"
+
+#include <fstream>
 #include <random>
 #include <lmcons.h>
 #include <codecvt>
+#include <client/r2client.h>
+#include <server/auth/serverauthentication.h>
 
 #define YES true
 #define NO false
@@ -240,6 +245,94 @@ ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 	}
 }
 
+static const int __stdcall h_send(SOCKET socket, const char* buf, int len, int flags)
+{
+	printf("");
+	const auto result = send(socket, buf, len, flags);
+	// NS::log::NORTHSTAR->warn("WSA::h_send({:x}, [buff], {}, {:x}) => {:", socket, /*buf,*/ len, flags, result);
+
+	return result;
+}
+
+static const int __stdcall h_sendto(SOCKET socket, const char* buf, int len, int flags, const sockaddr* to, int tolen)
+{
+	printf("");
+	const auto result = sendto(socket, buf, len, flags, to, tolen);
+	// NS::log::NORTHSTAR->warn(		"WSA::h_send({:x}, [buff], {}, {:x}, {:x}, {}) => {}", socket, /*buf,*/ len, flags,
+	// reinterpret_cast<uint64_t>(to), tolen, result);
+
+	return result;
+}
+
+static const uint64_t(__fastcall* o_pNET_SendPacket)(
+	void* chan,
+	int _socketIndex,
+	const netadr_s* address,
+	const char* data,
+	int length,
+	__int64 arg_28,
+	char bCompressed,
+	int a8,
+	char a9) = nullptr;
+static const uint64_t __fastcall h_NET_SendPacket(
+	void* chan, int _socketIndex, const netadr_s* address, const char* data, int length, __int64 arg_28, char bCompressed, int a8, char a9)
+{
+	bool isConnectPacket = _socketIndex == 0 && std::string(data).find("connect") != std::string::npos;
+	if (isConnectPacket)
+	{
+		// Protocol addition:
+		// 8 bytes: UID (uint64_t)
+		// 2 bytes: Length of pData (ushort)
+		// <length> bytes: pData
+		std::allocator<char> allocator;
+
+		const uint64_t uid = g_originProxy->GetProfile()->UserId;
+		const auto maxPersistenceBuffer = allocator.allocate(PERSISTENCE_MAX_SIZE);
+		ZeroMemory(maxPersistenceBuffer, PERSISTENCE_MAX_SIZE);
+
+		size_t persistenceLength {};
+		g_pServerAuthentication->ExportOfflinePersistentData(maxPersistenceBuffer, persistenceLength);
+
+		const auto additionalLength = 8 // uid (uint64_t)
+									  + 2 // length prefix for pdata (ushort)
+									  + persistenceLength;
+
+		const auto newMessageLength = length + additionalLength;
+
+		const auto newMessageBuffer = allocator.allocate(newMessageLength);
+		ZeroMemory(newMessageBuffer, newMessageLength);
+
+		size_t i = 0;
+
+		// Copy original message
+		memcpy(&newMessageBuffer[i], data, length);
+		i += length;
+
+		// Copy UID
+		memcpy(&newMessageBuffer[i], &uid, sizeof(uid));
+		i += sizeof(uid);
+
+		// Write length
+		assert(persistenceLength <= std::numeric_limits<uint16_t>().max()); // The things i'd do not to write USHRT_MAX
+		const auto persistenceLengthU16 = static_cast<uint16_t>(persistenceLength);
+		memcpy(&newMessageBuffer[i], &persistenceLengthU16, sizeof(persistenceLengthU16));
+		i += sizeof(persistenceLengthU16);
+
+		// Copy persistence
+		memcpy(&newMessageBuffer[i], maxPersistenceBuffer, persistenceLength);
+		i += persistenceLength;
+
+		bCompressed = true;
+
+		const auto result = o_pNET_SendPacket(chan, _socketIndex, address, newMessageBuffer, newMessageLength, arg_28, bCompressed, a8, a9);
+		NS::log::NORTHSTAR->warn("h_NET_SendPacket({}, {}) => {}", _socketIndex, newMessageLength, result);
+
+		return result;
+	}
+
+	return o_pNET_SendPacket(chan, _socketIndex, address, data, length, arg_28, bCompressed, a8, a9);
+}
+
 ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 {
 	if (g_LanMode->Enabled())
@@ -247,6 +340,25 @@ ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 		g_originProxy = new OriginProxy;
 		// "Return NULLPTR" on a function that is a prerequisite to all HTTP CURL requests
 		module.Offset(0x16F250 + 0xC00).Patch({0x33, 0xC0, 0xC3});
+
+		{
+			// Winsock test
+			DWORD oldProtect {};
+
+			auto addr = module.Offset((0x7FF88570EAC0 - 0x7FF885150000)).RCast<uint64_t*>(); //
+
+			VirtualProtect(addr, sizeof(uint64_t), PAGE_EXECUTE_READWRITE, &oldProtect);
+			*addr = reinterpret_cast<uint64_t>(&h_send);
+			VirtualProtect(addr, sizeof(uint64_t), oldProtect, &oldProtect);
+
+			addr = module.Offset((0x7FF88570EAD8 - 0x7FF885150000)).RCast<uint64_t*>();
+			VirtualProtect(addr, sizeof(uint64_t), PAGE_EXECUTE_READWRITE, &oldProtect);
+			*addr = reinterpret_cast<uint64_t>(&h_sendto);
+			VirtualProtect(addr, sizeof(uint64_t), oldProtect, &oldProtect);
+
+			o_pNET_SendPacket = module.Offset(0x21B640 + 0xC00).RCast<decltype(o_pNET_SendPacket)>();
+			HookAttach(&(PVOID&)o_pNET_SendPacket, (PVOID)h_NET_SendPacket);
+		}
 
 #ifdef DEBUG_PROXY
 		// Extensive net task logging, not sure how to turn it on "the normal way"
@@ -266,7 +378,6 @@ OriginProxy::OriginProxy()
 	this->originLastErrorPtr = engineModule.Offset(0x13978264).RCast<const OriginProxy::OriginError_t*>();
 	this->wsaLastError = engineModule.Offset(0x13FA2DD0).RCast<uint32_t*>();
 
-	std::string personaName {};
 	const char* nameFromCommandLine {};
 	if (CommandLine()->CheckParm("-playername", &nameFromCommandLine))
 	{
@@ -289,22 +400,46 @@ OriginProxy::OriginProxy()
 
 	strncpy(country, "France", ARRAYSIZE(country));
 
-	std::random_device rd;
-	std::mt19937_64 gen(rd());
-	std::uniform_int_distribution<uint64_t> dis;
+#define RANDOM_ID false
 
-	userId = dis(gen);
+	if (RANDOM_ID)
+	{
+		std::random_device rd;
+		std::mt19937_64 gen(rd());
+		std::uniform_int_distribution<uint64_t> dis;
+
+		userId = dis(gen);
+	}
+	else
+	{
+		const auto djb2_xor_nocase = [](const char* str, uint32_t hash)
+		{
+			for (char c = *str; c; c = *++str)
+			{
+				// Or with 0x20 makes the string case-insensitive
+				// but also messes up non-letters
+				hash = ((hash << 5) + hash) ^ (c | 0x20);
+			}
+
+			return hash;
+		};
+
+		userId = djb2_xor_nocase(persona, 0);
+	}
 
 	this->originProfile.Persona = persona;
 	this->originProfile.Country = country;
 	this->originProfile.AvatarId = avatarId;
 	this->originProfile.UserId = userId;
+	this->originProfile.PersonaId = userId; // What is persona ID?
 
 	this->originSettings.Environment = "";
 	this->originSettings.IsIGOAvailable = false;
 	this->originSettings.IsIGOEnabled = false;
 	this->originSettings.IsManualOffline = false;
 	this->originSettings.IsTelemetryEnabled = true;
+
+	NS::log::NORTHSTAR->info("Initialized Origin Proxy with persona name [{}] and UID [{}]", persona, userId);
 
 	CModule tier0Module("tier0.dll");
 	static const char*(__fastcall * o_pDetectLanguage)() {};

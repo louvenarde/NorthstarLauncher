@@ -98,7 +98,7 @@ void MasterServerManager::AuthenticateOriginWithMasterServer(const char* uid, co
 	{
 		// Self auth if we're in LAN mode
 		ZeroMemory(m_sOwnClientAuthToken, sizeof(m_sOwnClientAuthToken));
-		m_sOwnClientAuthToken[0] = '\x01';
+		strncpy_s(m_sOwnClientAuthToken, sizeof(m_sOwnClientAuthToken), uid, strnlen(uid, sizeof(m_sOwnClientAuthToken)));
 		m_bOriginAuthWithMasterServerSuccessful = true;
 		return;
 	}
@@ -786,11 +786,11 @@ void MasterServerManager::AuthenticateOffline(const char* uid)
 	strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), uid, sizeof(newAuthData.uid) - 1);
 	strncpy_s(newAuthData.username, sizeof(newAuthData.username), profile->Persona, sizeof(newAuthData.username) - 1);
 
-	newAuthData.pdataSize = PERSISTENCE_MAX_SIZE;
 	newAuthData.pdata = new char[PERSISTENCE_MAX_SIZE];
 	ZeroMemory(newAuthData.pdata, newAuthData.pdataSize);
+	g_pServerAuthentication->ExportOfflinePersistentData(newAuthData.pdata, newAuthData.pdataSize);
 
-	const auto authToken = "1";
+	const auto authToken = newAuthData.uid;
 
 	std::lock_guard<std::mutex> guard(g_pServerAuthentication->m_AuthDataMutex);
 	g_pServerAuthentication->m_RemoteAuthenticationData.clear();
