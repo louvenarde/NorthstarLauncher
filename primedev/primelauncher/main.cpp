@@ -165,8 +165,6 @@ void AwaitOriginStartup()
 
 void EnsureOriginStarted()
 {
-	return; // Do not start origin
-
 	if (GetProcessByName(L"Origin.exe") || GetProcessByName(L"EADesktop.exe"))
 		return; // already started
 
@@ -371,7 +369,7 @@ int main(int argc, char* argv[])
 
 	for (int i = 0; i < argc; i++)
 	{
-		if (!strcmp(argv[i], "-noOriginStartup"))
+		if (!strcmp(argv[i], "-noOriginStartup") || !strcmp(argv[i], "-lan"))
 			noOriginStartup = true;
 		else if (!strcmp(argv[i], "-dedicated")) // also checked by Northstar.dll
 			dedicated = true;
