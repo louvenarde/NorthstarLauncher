@@ -2,13 +2,13 @@
 #include "lan.h"
 #include "core/tier0.h"
 #include "engine/r2engine.h"
+#include "client/r2client.h"
+#include "server/auth/serverauthentication.h"
 
 #include <fstream>
 #include <random>
 #include <lmcons.h>
 #include <codecvt>
-#include <client/r2client.h>
-#include <server/auth/serverauthentication.h>
 
 #define YES true
 #define NO false
@@ -23,7 +23,7 @@
 // Until then, Origin and online access will be kept mandatory for offline play.
 //
 
-constexpr bool IS_REMOVING_DRM_LOCALLY_PIRACY = NO;
+constexpr bool IS_REMOVING_DRM_LOCALLY_PIRACY = YES;
 
 //
 ///////////////////////////
