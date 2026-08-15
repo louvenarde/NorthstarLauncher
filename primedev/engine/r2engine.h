@@ -127,7 +127,6 @@ class CBitRead : public CBitBuffer
 	uint32_t const* m_pData;
 };
 
-
 #pragma once
 typedef enum
 {
@@ -403,7 +402,7 @@ struct CClientState
 };
 #pragma pack(pop)
 
-//static_assert(sizeof(CClientState) == 0x1B629); // Not sure about this one
+// static_assert(sizeof(CClientState) == 0x1B629); // Not sure about this one
 static_assert(offsetof(CClientState, persistentData) == 0xAD8); // Very sure about this one
 
 extern CClientState* g_pLocalClientState;
