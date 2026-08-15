@@ -16,10 +16,11 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/error/en.h"
+#include "shared/offline_persistence.h"
+#include "proxy/lan.h"
 
 #include <cstring>
 #include <regex>
-#include <proxy/lan.h>
 
 using namespace std::chrono_literals;
 
@@ -499,7 +500,7 @@ void MasterServerManager::AuthenticateWithOwnServer(const char* uid, const char*
 	if (m_bAuthenticatingWithGameServer || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
 
-	if (g_LanMode->Enabled())
+	if (g_LanMode->Enabled()) // Grab it locally from disk instead of master
 	{
 		AuthenticateOffline(uid);
 		return;
@@ -788,7 +789,7 @@ void MasterServerManager::AuthenticateOffline(const char* uid)
 
 	newAuthData.pdata = new char[PERSISTENCE_MAX_SIZE];
 	ZeroMemory(newAuthData.pdata, newAuthData.pdataSize);
-	g_pServerAuthentication->ExportOfflinePersistentData(newAuthData.pdata, newAuthData.pdataSize);
+	g_pOfflinePersistence->ExportOfflinePersistentData(newAuthData.pdata, newAuthData.pdataSize);
 
 	const auto authToken = newAuthData.uid;
 

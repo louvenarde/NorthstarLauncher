@@ -3,6 +3,7 @@
 #include "engine/r2engine.h"
 #include <unordered_map>
 #include <string>
+#include <mutex>
 
 struct RemoteAuthData
 {
@@ -54,17 +55,6 @@ public:
 	bool RemovePlayerAuthData(CBaseClient* pPlayer);
 	bool IsLocalPlayer(CBaseClient* pPlayer);
 	void WritePersistentData(CBaseClient* pPlayer);
-
-	void ExportOfflinePersistentData(OUT char* buffer, OUT size_t& len);
-
-	// This kinda sucks for encapsulation because Hooks are all done outside of the constructor of the class, which prevents static private
-	// from working... Maybe we need to declare the hooks in member functions instead and set up the callbacks in the ctor?
-	void WriteOfflinePersistentData(const char* buffer, size_t length);
-
-private:
-	void WriteOfflinePersistentData(CBaseClient* pPlayer);
-	void ReadOfflinePersistentData(CBaseClient* pPlayer);
-	std::filesystem::path GetOfflinePersistentDataPath();
 };
 
 extern ServerAuthenticationManager* g_pServerAuthentication;

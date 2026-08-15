@@ -14,11 +14,8 @@
 #include "client/r2client.h"
 #include "server/r2server.h"
 #include "proxy/lan.h"
+#include "shared/offline_persistence.h"
 
-#include <shlobj_core.h>
-
-#include <fstream>
-#include <filesystem>
 #include <string>
 #include <thread>
 
@@ -153,7 +150,17 @@ void ServerAuthenticationManager::AuthenticatePlayer(CBaseClient* pPlayer, uint6
 	}
 
 	std::lock_guard<std::mutex> guard(m_AuthDataMutex);
-	auto authData = m_RemoteAuthenticationData.find(g_LanMode->Enabled() ? sUid : pAuthToken);
+
+	auto authData = m_RemoteAuthenticationData.find(pAuthToken);
+
+	if (Cvar_ns_auth_allow_insecure_write->GetBool() && authData == m_RemoteAuthenticationData.end())
+	{
+		// In LAN mode we supply UID instead of Auth Token
+		// In non-LAN mode, some clients might have a proper token (secure write) and some might not (connect payload), so we must use UID
+		// as a fallback key
+		authData = m_RemoteAuthenticationData.find(sUid);
+	}
+
 	if (authData != m_RemoteAuthenticationData.end())
 	{
 		// if we're resetting let script handle the reset with InitPersistentData() on connect
@@ -178,7 +185,7 @@ void ServerAuthenticationManager::AuthenticatePlayer(CBaseClient* pPlayer, uint6
 	{
 		if (IsLocalPlayer(pPlayer))
 		{
-			ReadOfflinePersistentData(pPlayer);
+			g_pOfflinePersistence->ReadOfflinePersistentData(pPlayer);
 		}
 
 		// set persistent data as ready
@@ -233,83 +240,8 @@ void ServerAuthenticationManager::WritePersistentData(CBaseClient* pPlayer)
 	}
 	else if (Cvar_ns_auth_allow_insecure_write->GetBool() && IsLocalPlayer(pPlayer))
 	{
-		WriteOfflinePersistentData(pPlayer);
+		g_pOfflinePersistence->WriteOfflinePersistentData(pPlayer);
 	}
-}
-
-void ServerAuthenticationManager::ExportOfflinePersistentData(OUT char* buffer, OUT size_t& len)
-{
-	const auto path = GetOfflinePersistentDataPath();
-	std::ifstream localData(path, std::ios::binary | std::ios::in);
-	if (localData.is_open())
-	{
-		ZeroMemory(buffer, PERSISTENCE_MAX_SIZE);
-		localData.read(buffer, PERSISTENCE_MAX_SIZE);
-		const auto streamPosition = localData.gcount();
-		if (streamPosition != -1)
-		{
-			len = streamPosition;
-		}
-		else
-		{
-			len = PERSISTENCE_MAX_SIZE;
-		}
-	}
-}
-
-void ServerAuthenticationManager::ReadOfflinePersistentData(CBaseClient* pPlayer)
-{
-	assert(IsLocalPlayer(pPlayer));
-
-	const auto path = GetOfflinePersistentDataPath();
-	std::ifstream localData(path, std::ios::binary | std::ios::in);
-	if (localData.is_open())
-	{
-		ZeroMemory(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
-		localData.read(pPlayer->m_PersistenceBuffer, ARRAYSIZE(pPlayer->m_PersistenceBuffer));
-	}
-}
-
-void ServerAuthenticationManager::WriteOfflinePersistentData(CBaseClient* pPlayer)
-{
-	assert(IsLocalPlayer(pPlayer));
-
-	WriteOfflinePersistentData(pPlayer->m_PersistenceBuffer, m_PlayerAuthenticationData[pPlayer].pdataSize);
-}
-
-void ServerAuthenticationManager::WriteOfflinePersistentData(const char* buffer, size_t size)
-{
-	if (size > 0) // Prevent a zero-size write from clearing the persistent data entirely
-	{
-		const auto path = GetOfflinePersistentDataPath();
-		const auto dir = path.parent_path();
-		std::filesystem::create_directory(dir);
-
-		std::ofstream localData(path, std::ios::binary | std::ios::out);
-		if (localData.is_open())
-		{
-			localData.write(buffer, size);
-		}
-	}
-}
-
-std::filesystem::path ServerAuthenticationManager::GetOfflinePersistentDataPath()
-{
-	const auto filename = std::format("persistent.pdata");
-
-	PWSTR appData = NULL;
-	if (SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE, NULL, &appData) == S_OK)
-	{
-		char dest[MAX_PATH];
-		wcstombs(dest, appData, MAX_PATH);
-
-		// Create a folder for northstar
-		std::filesystem::path appDataPath(dest);
-
-		return appDataPath / "Northstar" / filename;
-	}
-
-	return std::filesystem::path(filename);
 }
 
 // auth hooks
@@ -362,66 +294,6 @@ static void* h_CBaseServer__ConnectClient(
 
 	return o_pCBaseServer__ConnectClient(
 		packetHandler, packet, a3, a4, a5, a6, a7, playerName, serverFilter, a10, a11, a12, a13, a14, uid, a16, a17);
-}
-
-static void (*o_pPacketHandler_HandleConnect)(void* packetHandler, int source, netpacket_s* packet, __int64 a4, bool a5) = nullptr;
-static void h_PacketHandler_HandleConnect(void* packetHandler, int source, netpacket_s* packet, __int64 a4, bool a5)
-{
-
-	if (g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->GetBool())
-	{
-		constexpr auto BASE_CONNECT_PAYLOAD_LENGTH = 21;
-
-		if (packet->size > BASE_CONNECT_PAYLOAD_LENGTH) // Extra connect data is used to supply persistent data upon connection
-		{
-			// Protocol addition:
-			// 8 bytes: UID (uint64_t)
-			// 2 bytes: Length of pData (ushort)
-			// <length> bytes: pData
-			uint64_t uid {};
-			uint16_t pDataSize {};
-			char* pDataBuffer {};
-
-			size_t i = BASE_CONNECT_PAYLOAD_LENGTH;
-
-// Safe read
-#define READ(x)                                                                                                                            \
-	if (i + sizeof(x) <= packet->size)                                                                                                     \
-	{                                                                                                                                      \
-		memcpy(&x, &packet->data[i], sizeof(x));                                                                                           \
-		i += sizeof(x);                                                                                                                    \
-	}
-
-			READ(uid);
-			READ(pDataSize);
-
-			if (i + pDataSize >= packet->size)
-			{
-				pDataBuffer = new char[pDataSize];
-				memcpy(pDataBuffer, &packet->data[i], pDataSize);
-				i += pDataSize;
-			}
-			else
-			{
-				pDataSize = 0;
-			}
-
-#undef READ
-
-			// Erase previous auth data if any
-			const auto uidStr = std::to_string(uid);
-			g_pServerAuthentication->m_RemoteAuthenticationData.erase(uidStr);
-
-			// Create the new one to put it on server auth, it will get dequeued on next connection (which is this one)
-			RemoteAuthData newAuthData {};
-			strncpy_s(newAuthData.uid, sizeof(newAuthData.uid), uidStr.c_str(), sizeof(newAuthData.uid) - 1);
-			newAuthData.pdataSize = pDataSize;
-			newAuthData.pdata = pDataBuffer;
-
-			g_pServerAuthentication->m_RemoteAuthenticationData.insert(std::make_pair(uidStr, newAuthData));
-		}
-	}
-	o_pPacketHandler_HandleConnect(packetHandler, source, packet, a4, a5);
 }
 
 ConVar* Cvar_ns_allowuserclantags;
@@ -517,17 +389,6 @@ static void h_CBaseClient__Disconnect(CBaseClient* self, uint32_t unknownButAlwa
 	o_pCBaseClient__Disconnect(self, unknownButAlways1, buf);
 }
 
-static void (*o_pCClientState__Disconnect)(CClientState* self, char unk) = nullptr;
-void h_CClientState__Disconnect(CClientState* self, char unk)
-{
-	if (g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->GetBool() && *self->persistentData)
-	{
-		g_pServerAuthentication->WriteOfflinePersistentData(reinterpret_cast<const char*>(self->persistentData), PERSISTENCE_MAX_SIZE);
-	}
-
-	o_pCClientState__Disconnect(self, unk);
-}
-
 void ConCommand_ns_resetpersistence(const CCommand& args)
 {
 	NOTE_UNUSED(args);
@@ -543,9 +404,6 @@ void ConCommand_ns_resetpersistence(const CCommand& args)
 
 ON_DLL_LOAD_RELIESON("engine.dll", ServerAuthentication, (ConCommand, ConVar), (CModule module))
 {
-	o_pPacketHandler_HandleConnect = module.Offset(0x1177A0 + 0xC00).RCast<decltype(o_pPacketHandler_HandleConnect)>();
-	HookAttach(&(PVOID&)o_pPacketHandler_HandleConnect, (PVOID)h_PacketHandler_HandleConnect);
-
 	o_pCBaseServer__ConnectClient = module.Offset(0x114430).RCast<decltype(o_pCBaseServer__ConnectClient)>();
 	HookAttach(&(PVOID&)o_pCBaseServer__ConnectClient, (PVOID)h_CBaseServer__ConnectClient);
 
@@ -557,9 +415,6 @@ ON_DLL_LOAD_RELIESON("engine.dll", ServerAuthentication, (ConCommand, ConVar), (
 
 	o_pCBaseClient__Disconnect = module.Offset(0x1012C0).RCast<decltype(o_pCBaseClient__Disconnect)>();
 	HookAttach(&(PVOID&)o_pCBaseClient__Disconnect, (PVOID)h_CBaseClient__Disconnect);
-
-	o_pCClientState__Disconnect = module.Offset(0x8D050 + 0xC00).RCast<decltype(o_pCClientState__Disconnect)>();
-	HookAttach(&(PVOID&)o_pCClientState__Disconnect, (PVOID)h_CClientState__Disconnect);
 
 	g_pServerAuthentication = new ServerAuthenticationManager;
 

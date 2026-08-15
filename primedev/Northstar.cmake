@@ -199,6 +199,8 @@ add_library(
     "Northstar.def"
     "proxy/proxy.cpp"
     "proxy/proxy.h"
+    "shared/offline_persistence.cpp"
+    "shared/offline_persistence.h"
     )
 
 target_link_libraries(
