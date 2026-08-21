@@ -95,12 +95,18 @@ void LanMode::SendScanPing()
 			// For encryption you need to know your local IP Address and Port
 			// Therefore we must do one broadcast for each network card with a bound address
 			sockaddr_in sin {};
-			uint16_t localPort;
 			int addressLength = sizeof(sin);
-			if (getsockname(m_broadcastSocket, reinterpret_cast<struct sockaddr*>(&sin), &addressLength) == 0 &&
-				sin.sin_family == AF_INET && addressLength == sizeof(sin))
+			netadr_t r2address {};
+			if (getsockname(m_broadcastSocket, reinterpret_cast<sockaddr*>(&sin), &addressLength) == 0 && sin.sin_family == AF_INET &&
+				addressLength == sizeof(sin))
 			{
-				localPort = sin.sin_port;
+				// We're gonna use this crypto provider only once so it does not really matter
+				//   what IP we supply NET_Encrypt, let's give it the correct broadcast IP+Port still
+				r2address.type = NA_IP;
+				r2address.port = sin.sin_port;
+				r2address.ip[10] = 0xFF; // IPV4 marker
+				r2address.ip[11] = 0xFF;
+				memcpy_s(&r2address.ip[12], 4, &this->m_broadcastEndpoint.Ipv4.sin_addr, sizeof(this->m_broadcastEndpoint.Ipv4.sin_addr));
 			}
 			else
 			{
@@ -111,72 +117,61 @@ void LanMode::SendScanPing()
 				return;
 			}
 
-			const auto addresses = GetLocalIpv4Addresses();
-			for (const uint32_t& address : addresses)
+			ZeroMemory(&payload, sizeof(payload));
+
+			static_assert(sizeof(payload.encryptHeader.nonce) == 12);
+			static_assert(sizeof(payload.encryptHeader.tag) == 16);
+
+			int encryptedLength = NET_Encrypt(
+				&r2address,
+				LAN_BROADCAST_SCAN_MSG,
+				sizeof(LAN_BROADCAST_SCAN_MSG),
+				payload.messageData,
+				sizeof(payload.messageData),
+				&payload.encryptHeader.tag,
+				sizeof(payload.encryptHeader.tag),
+				&payload.encryptHeader.nonce,
+				sizeof(payload.encryptHeader.nonce));
+
+			assert(encryptedLength > 0);
+			if (encryptedLength <= 0)
 			{
-				netadr_t r2address {};
-				r2address.type = NA_IP;
-				memcpy(&r2address.ip[12], &address, sizeof(address));
-				r2address.port = localPort;
-				r2address.ip[10] = 0XFF;
-				r2address.ip[11] = 0XFF;
-
-				ZeroMemory(&payload, sizeof(payload));
-
-				static_assert(sizeof(payload.encryptHeader.nonce) == 12);
-				static_assert(sizeof(payload.encryptHeader.tag) == 16);
-
-				int encryptedLength = NET_Encrypt(
-					&r2address,
-					LAN_BROADCAST_SCAN_MSG,
-					sizeof(LAN_BROADCAST_SCAN_MSG),
-					payload.messageData,
-					sizeof(payload.messageData),
-					&payload.encryptHeader.tag,
-					sizeof(payload.encryptHeader.tag),
-					&payload.encryptHeader.nonce,
-					sizeof(payload.encryptHeader.nonce));
-
-				assert(encryptedLength > 0);
-				if (encryptedLength <= 0)
-				{
-					NS::log::NORTHSTAR->error("Failed to encrypt client scan message!");
-					return;
-				}
-
-				encryptedLength += sizeof(netPayload_s::encryptHeader);
-
-				const auto result = sendto(
-					this->m_broadcastSocket,
-					reinterpret_cast<const char*>(&payload),
-					encryptedLength,
-					0,
-					reinterpret_cast<const sockaddr*>(&this->m_broadcastEndpoint),
-					this->m_broadcastEndpointSize);
-
-				NS::log::NORTHSTAR->warn(
-					"WSA::h_sendto({:x}, {}, {}, {:x}, {:x}, {}) => {}",
-					this->m_broadcastSocket,
-					BufferToHexString(reinterpret_cast<const char*>(&payload), encryptedLength),
-					encryptedLength,
-					0,
-					*reinterpret_cast<uint64_t*>(&this->m_broadcastEndpoint),
-					this->m_broadcastEndpointSize,
-					result);
-
-				switch (lastError = WSAGetLastError())
-				{
-				case WSAECONNREFUSED:
-				case WSAEALREADY:
-				case WSAECONNABORTED:
-				case WSAETIMEDOUT:
-					lastError = ERROR_SUCCESS;
-					break;
-				}
-
-				assert(!lastError);
-				this->m_bIsBroadcastSocketOK &= lastError == ERROR_SUCCESS;
+				NS::log::NORTHSTAR->error("Failed to encrypt client scan message!");
+				return;
 			}
+
+			encryptedLength += sizeof(netPayload_s::encryptHeader);
+
+			const auto result = sendto(
+				this->m_broadcastSocket,
+				reinterpret_cast<const char*>(&payload),
+				encryptedLength,
+				0,
+				reinterpret_cast<const sockaddr*>(&this->m_broadcastEndpoint),
+				this->m_broadcastEndpointSize);
+
+			NS::log::NORTHSTAR->warn(
+				"WSA::h_sendto({:x}, {}, {}, {:x}, {:x}, {}) => {}",
+				this->m_broadcastSocket,
+				BufferToHexString(reinterpret_cast<const char*>(&payload), encryptedLength),
+				encryptedLength,
+				0,
+				*reinterpret_cast<uint64_t*>(&this->m_broadcastEndpoint),
+				this->m_broadcastEndpointSize,
+				result);
+
+			switch (lastError = WSAGetLastError())
+			{
+			case WSAECONNREFUSED:
+			case WSAEALREADY:
+			case WSAECONNABORTED:
+			case WSAETIMEDOUT:
+				lastError = ERROR_SUCCESS;
+				break;
+			}
+
+			assert(!lastError);
+			this->m_bIsBroadcastSocketOK &= lastError == ERROR_SUCCESS;
 		}
 	}
 }
@@ -288,77 +283,6 @@ void LanMode::SetupBroadcastSocket()
 	assert(!(lastError = WSAGetLastError()));
 
 	this->m_bIsBroadcastSocketOK = lastError == ERROR_SUCCESS;
-}
-
-std::vector<uint32_t> LanMode::GetLocalIpv4Addresses() const
-{
-	std::vector<uint32_t> addresses {};
-
-	IP_ADAPTER_ADDRESSES* msAdapters {};
-	size_t maxAdapterCount = 4; // starting value
-
-	while (true)
-	{
-		msAdapters = new IP_ADAPTER_ADDRESSES[maxAdapterCount];
-		int32_t size = static_cast<int32_t>(sizeof(IP_ADAPTER_ADDRESSES) * maxAdapterCount);
-		const auto result = GetAdaptersAddresses(
-			AF_INET,
-			GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_FRIENDLY_NAME | GAA_FLAG_INCLUDE_TUNNEL_BINDINGORDER,
-			NULL,
-			msAdapters,
-			reinterpret_cast<PULONG>(&size));
-
-		if (result == ERROR_BUFFER_OVERFLOW)
-		{
-			delete[] msAdapters;
-			maxAdapterCount *= 2;
-			continue;
-		}
-		else
-		{
-			if (result == ERROR_SUCCESS)
-			{
-				auto adapter = msAdapters;
-				while (adapter)
-				{
-					if (adapter->OperStatus == IfOperStatusUp)
-					{
-						auto addrPointer = adapter->FirstUnicastAddress;
-						while (addrPointer)
-						{
-							if (addrPointer)
-							{
-								const auto addr = *addrPointer;
-
-								uint32_t addressBytes {};
-								if (addr.Address.lpSockaddr->sa_family == AF_INET)
-								{
-									std::memcpy(&addressBytes, &addr.Address.lpSockaddr->sa_data[2], sizeof(addressBytes));
-								}
-
-								addresses.emplace_back(addressBytes);
-
-								addrPointer = addr.Next;
-							}
-						}
-					}
-
-					adapter = adapter->Next;
-				}
-			}
-			else
-			{
-				// Do nothing, it's messed up
-				assert(result);
-				NS::log::NORTHSTAR->error("Failed to get local network adapters for LAN discovery! {}", result);
-			}
-
-			delete[] msAdapters;
-			break;
-		}
-	}
-
-	return addresses;
 }
 
 void LanMode::LanServerReporter::ReportPresence(const ServerPresence* pServerPresence)

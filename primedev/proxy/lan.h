@@ -84,7 +84,6 @@ private:
 	void SendScanPing();
 	std::vector<ServerPresence> ReceivePresences(uint32_t timeout = 3000);
 	void SetupBroadcastSocket();
-	std::vector<uint32_t> GetLocalIpv4Addresses() const;
 
 	std::mutex m_clientListMutex {};
 	std::vector<LanServerReporter::ScanningClient> m_clientsToReplyTo {};
