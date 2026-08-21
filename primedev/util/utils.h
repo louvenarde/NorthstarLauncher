@@ -2,6 +2,8 @@
 
 void RemoveAsciiControlSequences(char* str, bool allow_color_codes);
 
+std::string BufferToHexString(const char* buf, int len);
+
 template <typename T> class ScopeGuard
 {
 public:

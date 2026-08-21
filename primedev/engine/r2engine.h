@@ -56,6 +56,52 @@ extern Cbuf_AddTextType Cbuf_AddText;
 typedef void (*Cbuf_ExecuteType)();
 extern Cbuf_ExecuteType Cbuf_Execute;
 
+typedef uint64_t(__fastcall* NET_SendPacketType)(
+	void* chan,
+	int _socketIndex,
+	const struct netadr_s* address,
+	const char* data,
+	int length,
+	__int64 arg_28,
+	char bCompressed,
+	int a8,
+	char a9);
+extern NET_SendPacketType NET_SendPacket;
+
+typedef int32_t(__fastcall* NET_SendToType)(
+	void* unused, SOCKET socket, const void* dataToSend, int length_, netadr_s* destination, __int64 unused_1, bool encrypt);
+extern NET_SendToType NET_SendTo;
+
+typedef int64_t(__fastcall* NET_EncryptType)(
+	const struct netadr_s* r2address,
+	const char* data,
+	unsigned int dataLength,
+	OUT char* outputBuffer,
+	int outputBufferSize,
+	struct netCryptoTag_s* tag,
+	int tagSize,
+	struct netCryptoNonce_s* nonce,
+	int nonceSize);
+extern NET_EncryptType NET_Encrypt;
+
+typedef int64_t(__fastcall* NET_DecryptType)(
+	const struct netadr_s* r2address,
+	const char* data,
+	unsigned int expectedDataLength,
+	struct netCryptoNonce_s* nonce,
+	int nonceSize,
+	struct netCryptoTag_s* tag,
+	int tagSize,
+	OUT char* outputBuffer,
+	int outputBufferSize);
+extern NET_DecryptType NET_Decrypt;
+
+typedef bool(__fastcall* NET_SockAddrToNetAddrType)(struct netadr_s* a1, const sockaddr_in6* a2);
+extern NET_SockAddrToNetAddrType NET_SockAddrToNetAddr;
+
+typedef bool(__fastcall* NET_NetAddrToSockAddrType)(sockaddr_in6* a1, const struct netadr_s* a2);
+extern NET_NetAddrToSockAddrType NET_NetAddrToSockAddr;
+
 extern bool (*CCommand__Tokenize)(CCommand& self, const char* pCommandString, cmd_source_t commandSource);
 
 // CEngine
@@ -134,6 +180,38 @@ typedef enum
 	NA_LOOPBACK,
 	NA_IP,
 } netadrtype_t;
+
+#pragma pack(push, 1)
+struct netCryptoNonce_s
+{
+	unsigned char nonce[12];
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct netCryptoTag_s
+{
+	unsigned char tag[16];
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct netCryptoHeader_s
+{
+	netCryptoNonce_s nonce;
+	netCryptoTag_s tag;
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct netPayload_s // Real name unknown
+{
+	netCryptoHeader_s encryptHeader;
+	char messageData[1236];
+};
+#pragma pack(pop)
+
+static_assert(sizeof(netCryptoHeader_s) == 0x1C);
 
 #pragma pack(push, 1)
 typedef struct netadr_s

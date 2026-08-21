@@ -95,7 +95,7 @@ void MasterServerManager::AuthenticateOriginWithMasterServer(const char* uid, co
 	if (m_bOriginAuthWithMasterServerInProgress || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
 
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		// Self auth if we're in LAN mode
 		ZeroMemory(m_sOwnClientAuthToken, sizeof(m_sOwnClientAuthToken));
@@ -214,14 +214,29 @@ void MasterServerManager::RequestServerList()
 			m_bRequestingServerList = true;
 			m_bScriptRequestingServerList = true;
 
-			if (g_LanMode->Enabled())
+			if (g_pLanMode->Enabled())
 			{
 				spdlog::info("Polling local area network for servers...");
 
-				// TODO
-				// 1) Send stray  out of band packet on .255
-				// 2) Wait 1 second
-				// 3) Recv and list servers
+				const auto servers = g_pLanMode->ScanForServers();
+
+				m_vRemoteServers.clear();
+
+				for (const auto& server : servers)
+				{
+					RemoteServerInfo remoteServerInfo(
+						server.m_sServerId.c_str(),
+						server.m_sServerName.c_str(),
+						server.m_sServerDesc.c_str(),
+						server.m_MapName,
+						server.m_PlaylistName,
+						"",
+						server.m_iPlayerCount,
+						server.m_iMaxPlayers,
+						server.m_Password[0] != '\x00');
+
+					m_vRemoteServers.emplace_back(remoteServerInfo);
+				}
 
 				// Cleanup
 				m_bRequestingServerList = false;
@@ -387,7 +402,7 @@ void MasterServerManager::RequestServerList()
 void MasterServerManager::RequestMainMenuPromos()
 {
 	m_bHasMainMenuPromoData = false;
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		m_bSuccessfullyConnected = true;
 		return;
@@ -500,7 +515,7 @@ void MasterServerManager::AuthenticateWithOwnServer(const char* uid, const char*
 	if (m_bAuthenticatingWithGameServer || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
 
-	if (g_LanMode->Enabled()) // Grab it locally from disk instead of master
+	if (g_pLanMode->Enabled()) // Grab it locally from disk instead of master
 	{
 		AuthenticateOffline(uid);
 		return;
@@ -1081,8 +1096,16 @@ ON_DLL_LOAD_RELIESON("engine.dll", MasterServer, (ConCommand, ServerPresence), (
 
 	RegisterConCommand("ns_fetchservers", ConCommand_ns_fetchservers, "Fetch all servers from the masterserver", FCVAR_CLIENTDLL);
 
-	MasterServerPresenceReporter* presenceReporter = new MasterServerPresenceReporter;
-	g_pServerPresence->AddPresenceReporter(presenceReporter);
+	if (g_pLanMode->Enabled())
+	{
+		LanMode::LanServerReporter* presenceReporter = new LanMode::LanServerReporter;
+		g_pServerPresence->AddPresenceReporter(presenceReporter);
+	}
+	else
+	{
+		MasterServerPresenceReporter* presenceReporter = new MasterServerPresenceReporter;
+		g_pServerPresence->AddPresenceReporter(presenceReporter);
+	}
 }
 
 void MasterServerPresenceReporter::CreatePresence(const ServerPresence* pServerPresence)

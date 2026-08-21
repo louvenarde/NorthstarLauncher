@@ -429,7 +429,7 @@ ON_DLL_LOAD_RELIESON("engine.dll", ServerAuthentication, (ConCommand, ConVar), (
 		"Whether the pdata of unauthenticated clients will be written to disk when changed");
 
 	// LAN Mode is always insecure mode
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		g_pServerAuthentication->Cvar_ns_auth_allow_insecure->SetValue(true);
 		g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->SetValue(true);

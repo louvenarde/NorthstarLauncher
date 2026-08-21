@@ -3,6 +3,12 @@
 Cbuf_GetCurrentPlayerType Cbuf_GetCurrentPlayer;
 Cbuf_AddTextType Cbuf_AddText;
 Cbuf_ExecuteType Cbuf_Execute;
+NET_SendPacketType NET_SendPacket;
+NET_SendToType NET_SendTo;
+NET_EncryptType NET_Encrypt;
+NET_DecryptType NET_Decrypt;
+NET_SockAddrToNetAddrType NET_SockAddrToNetAddr;
+NET_NetAddrToSockAddrType NET_NetAddrToSockAddr;
 
 bool (*CCommand__Tokenize)(CCommand& self, const char* pCommandString, cmd_source_t commandSource);
 
@@ -22,11 +28,20 @@ CGlobalVars* g_pGlobals;
 
 ON_DLL_LOAD("engine.dll", R2Engine, (CModule module))
 {
+	NET_SockAddrToNetAddr = module.Offset(0x41F780).RCast<NET_SockAddrToNetAddrType>();
+	NET_NetAddrToSockAddr = module.Offset(0x41FB00).RCast<NET_NetAddrToSockAddrType>();
+
+	NET_Encrypt = module.Offset(0x2151B0 + 0xC00).RCast<NET_EncryptType>();
+	NET_Decrypt = module.Offset(0x214FB0).RCast<NET_DecryptType>();
+
+	NET_SendTo = module.Offset(0x21C970).RCast<NET_SendToType>();
 	Cbuf_GetCurrentPlayer = module.Offset(0x120630).RCast<Cbuf_GetCurrentPlayerType>();
 	Cbuf_AddText = module.Offset(0x1203B0).RCast<Cbuf_AddTextType>();
 	Cbuf_Execute = module.Offset(0x1204B0).RCast<Cbuf_ExecuteType>();
 
 	CCommand__Tokenize = module.Offset(0x418380).RCast<bool (*)(CCommand&, const char*, cmd_source_t)>();
+
+	NET_SendPacket = module.Offset(0x21C240).RCast<NET_SendPacketType>();
 
 	g_pEngine = module.Offset(0x7D70C8).Deref().RCast<CEngine*>();
 

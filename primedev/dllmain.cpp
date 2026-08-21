@@ -64,7 +64,7 @@ bool InitialiseNorthstar()
 	g_pVanillaCompatibility = new VanillaCompatibility();
 	g_pVanillaCompatibility->SetVanillaCompatibility(strstr(GetCommandLineA(), "-vanilla") != NULL);
 
-	g_LanMode = new LanMode(strstr(GetCommandLineA(), "-lan") != NULL);
+	g_pLanMode = new LanMode(strstr(GetCommandLineA(), "-lan") != NULL);
 
 	// Write launcher version to log
 	StartupLog();

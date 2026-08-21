@@ -22,7 +22,7 @@ static bool __fastcall h_CheckIfOriginIsInstalled()
 static uint64_t(__fastcall* o_pTryToStartOrigin)(void* a1) = nullptr;
 static uint64_t __fastcall h_TryToStartOrigin(void* a1)
 {
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		return 0;
 	}

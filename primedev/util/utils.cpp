@@ -80,3 +80,15 @@ void RemoveAsciiControlSequences(char* str, bool allow_color_codes)
 				*pc = ' ';
 	}
 }
+
+std::string BufferToHexString(const char* buf, int len)
+{
+	std::string output {};
+	for (int i = 0; i < len; i++)
+	{
+		uint8_t integer = static_cast<uint8_t>(buf[i]);
+		output += std::format("{:x} ", integer);
+	}
+
+	return output;
+}

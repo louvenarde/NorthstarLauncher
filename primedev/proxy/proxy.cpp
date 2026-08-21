@@ -9,6 +9,7 @@
 #include <random>
 #include <lmcons.h>
 #include <codecvt>
+#include <util/utils.h>
 
 #define YES true
 #define NO false
@@ -155,7 +156,7 @@ static OriginProxy::OriginError_t __fastcall h_OriginQueryOffers(
 
 ON_DLL_LOAD("tier0.dll", Tier0Proxy, (CModule module))
 {
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		if (!IS_REMOVING_DRM_LOCALLY_PIRACY)
 		{
@@ -208,7 +209,7 @@ static const char** __fastcall h_OriginGetErrorInfo(int64_t errorCode)
 
 ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 {
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		if (!IS_REMOVING_DRM_LOCALLY_PIRACY)
 		{
@@ -241,10 +242,14 @@ ON_DLL_LOAD("OriginSDK.dll", OriginSDKProxy, (CModule module))
 }
 
 #ifdef DEBUG_PROXY
-static const int __stdcall h_send(SOCKET socket, const char* buf, int len, int flags)
+
+static const int __stdcall h_bind(SOCKET socket, const sockaddr* name, int len)
 {
-	const auto result = send(socket, buf, len, flags);
-	NS::log::NORTHSTAR->warn("WSA::h_send({:x}, [buff], {}, {:x}) => {:", socket, /*buf,*/ len, flags, result);
+	const auto in6 = reinterpret_cast<const sockaddr_in6*>(name);
+	const auto in4 = reinterpret_cast<const sockaddr_in*>(name);
+
+	const auto result = bind(socket, name, len);
+	NS::log::NORTHSTAR->warn("WSA::h_bind({:x}, [buff], {}) => {}", socket, /*buf,*/ len, result);
 
 	return result;
 }
@@ -253,7 +258,33 @@ static const int __stdcall h_sendto(SOCKET socket, const char* buf, int len, int
 {
 	const auto result = sendto(socket, buf, len, flags, to, tolen);
 	NS::log::NORTHSTAR->warn(
-		"WSA::h_send({:x}, [buff], {}, {:x}, {:x}, {}) => {}", socket, /*buf,*/ len, flags, reinterpret_cast<uint64_t>(to), tolen, result);
+		"WSA::h_sendto({:x}, {}, {}, {:x}, {:x}, {}) => {}",
+		socket,
+		BufferToHexString(buf, len),
+		len,
+		flags,
+		reinterpret_cast<uint64_t>(to),
+		tolen,
+		result);
+
+	return result;
+}
+
+static const int __stdcall h_recvfrom(SOCKET socket, char* buf, int len, int flags, sockaddr& from, int& fromlen)
+{
+	const auto result = recvfrom(socket, buf, len, flags, &from, &fromlen);
+
+	if (result > 0)
+	{
+		NS::log::NORTHSTAR->warn(
+			"WSA::h_recvfrom({:x}, {}, {}, {:x}, [from], {}) => {}",
+			socket,
+			BufferToHexString(buf, result),
+			len,
+			flags,
+			/*from,*/ fromlen,
+			result);
+	}
 
 	return result;
 }
@@ -261,7 +292,7 @@ static const int __stdcall h_sendto(SOCKET socket, const char* buf, int len, int
 
 ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 {
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		g_originProxy = new OriginProxy;
 
@@ -269,18 +300,23 @@ ON_DLL_LOAD("engine.dll", EngineProxy, (CModule module))
 		module.Offset(0x16FE50).Patch({0x33, 0xC0, 0xC3});
 
 #ifdef DEBUG_PROXY
+
+// We need to do it manually because Northstar's custom Wsock32 partial proxy messes up the import table enough to crash minhook
+#define HOOK_IMPORT(address, hook)                                                                                                         \
+	{                                                                                                                                      \
+		DWORD oldProtect {};                                                                                                               \
+		auto addr = module.Offset(address).RCast<uint64_t*>();                                                                             \
+		VirtualProtect(addr, sizeof(uint64_t), PAGE_EXECUTE_READWRITE, &oldProtect);                                                       \
+		*addr = reinterpret_cast<uint64_t>(&hook);                                                                                         \
+		VirtualProtect(addr, sizeof(uint64_t), oldProtect, &oldProtect);                                                                   \
+	}
+
 		// Override WSA to log every request in debug mode
-		DWORD oldProtect {};
-		auto addr = module.Offset((0x7FF88570EAC0 - 0x7FF885150000)).RCast<uint64_t*>(); //
+		HOOK_IMPORT(0x5BEAD8, h_sendto);
+		HOOK_IMPORT(0x5BEB00, h_bind);
+		HOOK_IMPORT(0x5BEAD0, h_recvfrom);
 
-		VirtualProtect(addr, sizeof(uint64_t), PAGE_EXECUTE_READWRITE, &oldProtect);
-		*addr = reinterpret_cast<uint64_t>(&h_send);
-		VirtualProtect(addr, sizeof(uint64_t), oldProtect, &oldProtect);
-
-		addr = module.Offset((0x7FF88570EAD8 - 0x7FF885150000)).RCast<uint64_t*>();
-		VirtualProtect(addr, sizeof(uint64_t), PAGE_EXECUTE_READWRITE, &oldProtect);
-		*addr = reinterpret_cast<uint64_t>(&h_sendto);
-		VirtualProtect(addr, sizeof(uint64_t), oldProtect, &oldProtect);
+#undef HOOK_IMPORT
 
 		// Extensive net task logging, not sure how to turn it on "the normal way"
 		module.Offset(0x2601BC).NOP(2);

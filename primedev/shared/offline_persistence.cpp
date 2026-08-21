@@ -186,16 +186,6 @@ std::filesystem::path OfflinePersistence::GetOfflinePersistentDataPath()
 	return std::filesystem::path(filename);
 }
 
-const uint64_t(__fastcall* OfflinePersistence::o_pNET_SendPacket)(
-	void* chan,
-	int _socketIndex,
-	const netadr_s* address,
-	const char* data,
-	int length,
-	__int64 arg_28,
-	char bCompressed,
-	int a8,
-	char a9) = nullptr;
 const uint64_t __fastcall OfflinePersistence::h_NET_SendPacket(
 	void* chan, int _socketIndex, const netadr_s* address, const char* data, int length, __int64 arg_28, char bCompressed, int a8, char a9)
 {
@@ -210,13 +200,13 @@ const uint64_t __fastcall OfflinePersistence::h_NET_SendPacket(
 
 			bCompressed = length > 1024; // This will very likely occur. Since single burst transmissions are <1228, we compress above ~1000
 
-			const auto result = o_pNET_SendPacket(chan, _socketIndex, address, data, length, arg_28, bCompressed, a8, a9);
+			const auto result = NET_SendPacket(chan, _socketIndex, address, data, length, arg_28, bCompressed, a8, a9);
 
 			return result;
 		}
 	}
 
-	return o_pNET_SendPacket(chan, _socketIndex, address, data, length, arg_28, bCompressed, a8, a9);
+	return NET_SendPacket(chan, _socketIndex, address, data, length, arg_28, bCompressed, a8, a9);
 }
 
 void (*OfflinePersistence::o_pPacketHandler_HandleConnect)(void* packetHandler, int source, netpacket_s* packet, __int64 a4, bool a5) =
@@ -254,8 +244,7 @@ ON_DLL_LOAD("engine.dll", OfflinePersistenceCtor, (CModule module))
 
 OfflinePersistence::OfflinePersistence(CModule module)
 {
-	o_pNET_SendPacket = module.Offset(0x21C240).RCast<decltype(o_pNET_SendPacket)>();
-	HookAttach(&(PVOID&)o_pNET_SendPacket, (PVOID)h_NET_SendPacket);
+	HookAttach(&(PVOID&)NET_SendPacket, (PVOID)h_NET_SendPacket);
 
 	o_pPacketHandler_HandleConnect = module.Offset(0x1183A0).RCast<decltype(o_pPacketHandler_HandleConnect)>();
 	HookAttach(&(PVOID&)o_pPacketHandler_HandleConnect, (PVOID)h_PacketHandler_HandleConnect);

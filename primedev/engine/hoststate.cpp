@@ -61,7 +61,7 @@ static void __fastcall h_CHostState__State_NewGame(CHostState* self)
 	Cbuf_Execute();
 
 	// LAN Mode is always insecure mode
-	if (g_LanMode->Enabled())
+	if (g_pLanMode->Enabled())
 	{
 		g_pServerAuthentication->Cvar_ns_auth_allow_insecure->SetValue(true);
 		g_pServerAuthentication->Cvar_ns_auth_allow_insecure_write->SetValue(true);
