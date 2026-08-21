@@ -21,6 +21,10 @@
 
 #include <cstring>
 #include <regex>
+#include <WinSock2.h>
+#include <ws2ipdef.h>
+#include <WinDNS.h>
+#include <iphlpapi.h>
 
 using namespace std::chrono_literals;
 
@@ -657,6 +661,37 @@ void MasterServerManager::AuthenticateWithServer(const char* uid, const char* pl
 	// dont wait, just stop if we're trying to do 2 auth requests at once
 	if (m_bAuthenticatingWithGameServer || g_pVanillaCompatibility->GetVanillaCompatibility())
 		return;
+
+	if (g_pLanMode->Enabled()) // Lan clients are self authentified
+	{
+		// Very normal Windows APIs require very normal formats
+		constexpr size_t serverAddressLength = sizeof(server.id);
+		wchar_t* wideAddressPort = new wchar_t[serverAddressLength];
+		mbstowcs(wideAddressPort, server.id, serverAddressLength);
+		NET_ADDRESS_INFO addressInfo {};
+		USHORT port {};
+		const auto parse = ParseNetworkString(wideAddressPort, NET_STRING_IPV4_SERVICE, &addressInfo, &port, NULL);
+
+		if (parse == ERROR_SUCCESS)
+		{
+			m_pendingConnectionInfo.ip = addressInfo.Ipv4Address.sin_addr;
+			m_pendingConnectionInfo.port = port;
+
+			strncpy_s(m_pendingConnectionInfo.authToken, sizeof(m_pendingConnectionInfo.authToken), uid, strlen(uid));
+
+			m_bHasPendingConnectionInfo = true;
+			m_bSuccessfullyAuthenticatedWithGameServer = true;
+
+			m_currentServer = server;
+			m_sCurrentServerPassword = std::string();
+			return;
+		}
+		else
+		{
+			spdlog::error("Could not parse ip address {}", server.id);
+			assert(parse);
+		}
+	}
 
 	m_bAuthenticatingWithGameServer = true;
 	m_bScriptAuthenticatingWithGameServer = true;

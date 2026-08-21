@@ -31,7 +31,7 @@ ON_DLL_LOAD("engine.dll", R2Engine, (CModule module))
 	NET_SockAddrToNetAddr = module.Offset(0x41F780).RCast<NET_SockAddrToNetAddrType>();
 	NET_NetAddrToSockAddr = module.Offset(0x41FB00).RCast<NET_NetAddrToSockAddrType>();
 
-	NET_Encrypt = module.Offset(0x2151B0 + 0xC00).RCast<NET_EncryptType>();
+	NET_Encrypt = module.Offset(0x2151B0).RCast<NET_EncryptType>();
 	NET_Decrypt = module.Offset(0x214FB0).RCast<NET_DecryptType>();
 
 	NET_SendTo = module.Offset(0x21C970).RCast<NET_SendToType>();
