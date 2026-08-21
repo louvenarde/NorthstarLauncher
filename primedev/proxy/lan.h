@@ -6,7 +6,6 @@
 // Required for the very normal Microsoft API for interface enumeration
 #pragma comment(lib, "iphlpapi.lib")
 
-
 class LanMode
 {
 public:
