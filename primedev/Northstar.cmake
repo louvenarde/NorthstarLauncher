@@ -203,8 +203,8 @@ add_library(
     "proxy/lan.h"
     "shared/offline_persistence.cpp"
     "shared/offline_persistence.h"
-	"engine/custom_packet_handler.cpp"
-	"engine/custom_packet_handler.h"
+    "engine/custom_packet_handler.cpp"
+    "engine/custom_packet_handler.h"
     )
 
 target_link_libraries(
