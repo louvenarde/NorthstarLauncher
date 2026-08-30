@@ -101,7 +101,6 @@ extern NET_SockAddrToNetAddrType NET_SockAddrToNetAddr;
 typedef bool(__fastcall* NET_NetAddrToSockAddrType)(sockaddr_in6* a1, const struct netadr_s* a2);
 extern NET_NetAddrToSockAddrType NET_NetAddrToSockAddr;
 
-
 extern bool (*CCommand__Tokenize)(CCommand& self, const char* pCommandString, cmd_source_t commandSource);
 
 // CEngine
@@ -187,7 +186,6 @@ struct netPayload_s // Real name unknown
 #pragma pack(pop)
 
 static_assert(sizeof(netCryptoHeader_s) == 0x1C);
-
 
 #pragma pack(push, 1)
 typedef struct netadr_s
