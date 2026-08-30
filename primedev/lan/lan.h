@@ -3,13 +3,10 @@
 #include "server/serverpresence.h"
 #include "engine/r2engine.h"
 
-// Required for the very normal Microsoft API for interface enumeration
-#pragma comment(lib, "iphlpapi.lib")
-
 class Lan
 {
 public:
-	Lan(bool isLanMode);
+	Lan();
 
 	class LanServerReporter : public ServerPresenceReporter
 	{
@@ -64,15 +61,22 @@ public:
 		friend Lan;
 
 	public:
-		void ReportPresence(const struct ServerPresence* pServerPresence) override;
+		void ReportPresence(double flCurrentTime, const struct ServerPresence* pServerPresence) override;
+
+	protected:
+		float GetPresenceUpdateCooldown() override
+		{
+			return 100.0f; // 100 ms is good because it wastes no resources when there is no scan to reply to, and responds timely when
+						   // there is any
+		};
 	};
 
-	bool Enabled() { return m_bIsLanMode; }
+	bool Enabled() { return m_bIsLanAvailable; }
 	std::vector<ServerPresence> ScanForServers();
 	void DiscoverClient(const netadr_t& adr);
 
 private:
-	bool m_bIsLanMode = false;
+	bool m_bIsLanAvailable = false;
 
 	_SOCKADDR_INET m_broadcastEndpoint;
 	int32_t m_broadcastEndpointSize; // WSA is a strange fellow
@@ -82,7 +86,7 @@ private:
 
 	uint16_t GetBroadcastPort() const;
 	void SendScanPing();
-	std::vector<ServerPresence> ReceivePresences(uint32_t timeout = 3000);
+	std::vector<ServerPresence> ReceivePresences(uint32_t timeout = 1000);
 	void SetupBroadcastSocket();
 
 	std::mutex m_clientListMutex {};

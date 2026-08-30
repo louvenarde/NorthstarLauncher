@@ -152,10 +152,6 @@ void ServerPresenceManager::RunFrame(double flCurrentTime)
 	for (ServerPresenceReporter* reporter : m_vPresenceReporters)
 		reporter->RunFrame(flCurrentTime, &m_ServerPresence);
 
-	// run on a specified delay
-	if ((flCurrentTime - m_flLastPresenceUpdate) * 1000 < Cvar_ns_server_presence_update_rate->GetFloat())
-		return;
-
 	// is this the first frame we're updating this presence?
 	if (m_bFirstPresenceUpdate)
 	{
@@ -169,7 +165,13 @@ void ServerPresenceManager::RunFrame(double flCurrentTime)
 	m_flLastPresenceUpdate = flCurrentTime;
 
 	for (ServerPresenceReporter* reporter : m_vPresenceReporters)
-		reporter->ReportPresence(&m_ServerPresence);
+	{
+		// run on a specified delay
+		if (reporter->IsDueForUpdate(flCurrentTime))
+		{
+			reporter->ReportPresence(flCurrentTime, &m_ServerPresence);
+		}
+	}
 }
 
 void ServerPresenceManager::SetPort(const int iPort)
@@ -228,6 +230,17 @@ void ServerPresenceManager::SetPlaylist(const char* pPlaylistName)
 void ServerPresenceManager::SetPlayerCount(const int iPlayerCount)
 {
 	m_ServerPresence.m_iPlayerCount = iPlayerCount;
+}
+
+inline void ServerPresenceReporter::ReportPresence(double flCurrentTime, const ServerPresence*)
+{
+	// Default implementation just notifies the presence as updated
+	m_flLastPresenceUpdate = flCurrentTime;
+}
+
+inline bool ServerPresenceReporter::IsDueForUpdate(double flCurrentTime)
+{
+	return (flCurrentTime - m_flLastPresenceUpdate) * 1000 < GetPresenceUpdateCooldown();
 }
 
 ON_DLL_LOAD_RELIESON("engine.dll", ServerPresence, ConVar, (CModule module))

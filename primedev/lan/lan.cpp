@@ -16,7 +16,7 @@ constexpr char LAN_BROADCAST_SCAN_MSG[] = "\xFF\xFF\xFF\xFF"
 
 Lan* g_pLan;
 
-Lan::Lan(bool isLanMode)
+Lan::Lan()
 	: m_bIsBroadcastSocketOK(false)
 	, m_broadcastEndpointSize(0)
 	, m_broadcastSocket(0)
@@ -26,19 +26,16 @@ Lan::Lan(bool isLanMode)
 	if (bInitialised)
 		return;
 
-	if (isLanMode)
-	{
-		const auto wVersionRequested = MAKEWORD(2, 2);
-		WSADATA wsaData;
-		int lastError = WSAStartup(wVersionRequested, &wsaData);
-		assert(!lastError);
+	const auto wVersionRequested = MAKEWORD(2, 2);
+	WSADATA wsaData;
+	int lastError = WSAStartup(wVersionRequested, &wsaData);
+	assert(!lastError);
 
-		isLanMode &= lastError == ERROR_SUCCESS;
-		SetupBroadcastSocket();
-	}
+	const bool isLanAvailable = lastError == ERROR_SUCCESS;
+	SetupBroadcastSocket();
 
 	bInitialised = true;
-	m_bIsLanMode = isLanMode;
+	m_bIsLanAvailable = isLanAvailable;
 }
 
 std::vector<ServerPresence> Lan::ScanForServers()
@@ -275,11 +272,21 @@ void Lan::SetupBroadcastSocket()
 	this->m_bIsBroadcastSocketOK = lastError == ERROR_SUCCESS;
 }
 
-void Lan::LanServerReporter::ReportPresence(const ServerPresence* pServerPresence)
+void Lan::LanServerReporter::ReportPresence(double flCurrentTime, const ServerPresence* pServerPresence)
 {
 	// Send unicast to broadcasting clients - default Windows firewall allows a single unicast response to a broadcast within 3
 	// seconds of the emitted broadcast, so broadcasting has to be a client's job, not a server's job
 	std::lock_guard _(g_pLan->m_clientListMutex);
+
+	if (g_pLan->m_clientsToReplyTo.size() > 0)
+	{
+		// We don't trigger the presence cooldown if we did nothing - this allows the LAN server to answer broadcasts with minimal latency
+		ServerPresenceReporter::ReportPresence(flCurrentTime, pServerPresence);
+	}
+	else
+	{
+		return; // Nothing to do here
+	}
 
 	for (const auto& client : g_pLan->m_clientsToReplyTo)
 	{

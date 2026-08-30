@@ -24,5 +24,5 @@ target_link_libraries(
 
 set_target_properties(
     NorthstarLauncher PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${NS_BINARY_DIR} LINK_FLAGS
-                                                                           "/MANIFEST:NO /DEBUG /STACK:8000000"
+                                                                           "/MANIFEST:NO /DEBUG /STACK:8000000 /DYNAMICBASE:NO"
     )
