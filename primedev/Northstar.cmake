@@ -61,6 +61,8 @@ add_library(
     "dedicated/dedicatedlogtoclient.cpp"
     "dedicated/dedicatedlogtoclient.h"
     "dedicated/dedicatedmaterialsystem.cpp"
+    "engine/custom_packet_handler.cpp"
+    "engine/custom_packet_handler.h"
     "engine/gl_matsysiface.cpp"
     "engine/host.cpp"
     "engine/hoststate.cpp"
