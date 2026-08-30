@@ -201,7 +201,9 @@ ON_DLL_LOAD_RELIESON("engine.dll", ServerAtlasPacketHandler, CustomPacketHandler
 {
 	assert(g_pCustomPacketHandler);
 	g_pCustomPacketHandler->RegisterPacketHandler(
-		'T', [](void* handler, netpacket_s* packet, OUT bool& executeOriginalHandler) {
+		'T',
+		[](void* handler, netpacket_s* packet, OUT bool& executeOriginalHandler)
+		{
 			ProcessAtlasConnectionlessPacket(packet);
 			executeOriginalHandler = false;
 		});
